@@ -83,7 +83,7 @@ devsecops_secrets:
 
       if [ "$SECRETS_ENABLED" != "true" ]; then
         echo "Secret detection disabled in configuration"
-        echo '{"vulnerabilities": []}' > gl-secret-detection-report.json
+        echo '[]' > gl-secret-detection-report.json
         exit 0
       fi
       
@@ -111,15 +111,18 @@ devsecops_secrets:
         echo '{"vulnerabilities": []}' > gl-secret-detection-report.json
       fi
       
-      FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-secret-detection-report.json 2>/dev/null || echo "0")
+      FINDINGS_COUNT=$(jq 'length' gl-secret-detection-report.json 2>/dev/null || echo "0")
       
       if [ "$FINDINGS_COUNT" -gt 0 ]; then
         echo "Warning: $FINDINGS_COUNT secret(s) detected. Check the Security tab for details."
         
         echo ""
-        echo "Summary of detected secrets:"
-        jq -r '.vulnerabilities[] | "- \(.category): \(.location.file):\(.location.start_line)"' gl-secret-detection-report.json 2>/dev/null || echo "Could not parse findings"
+        echo "----------------------------------------------------"
+        echo "Summary of Detected Secrets:"
+        jq -r 'map("- \(.RuleID | ascii_upcase): \(.File):\(.StartLine) (Commit: \(.Commit[0:7]) by \(.Author)) - \"\(.Message)\"") | .[]' gl-secret-detection-report.json 2>/dev/null || echo "Could not parse findings"
+        echo "----------------------------------------------------"
         echo ""
+
         echo "Check the Security tab in Gitlab for detailed analysis."
 
         if [ "$FAIL_ON_SECRET_DETECTION" = "true" ]; then
