@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gitleaks Security Report</title>
+    <style>
+        /* Light Mode Styles */
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .summary {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        .summary-item {
+            flex: 1;
+            padding: 10px;
+        }
+        .summary-item h2 {
+            margin: 0;
+            color: #555;
+            font-size: 1.2em;
+        }
+        .summary-item p {
+            margin: 5px 0 0;
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .finding {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-left: 5px solid #e74c3c; /* Red border for emphasis */
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .finding-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .finding-header h3 {
+            margin: 0;
+            color: #e74c3c;
+            font-size: 1.1em;
+        }
+        .finding-header span {
+            font-size: 0.9em;
+            color: #777;
+        }
+        .finding p {
+            margin: 5px 0;
+            font-size: 0.9em;
+        }
+        .finding strong {
+            color: #555;
+        }
+        .code-snippet {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: "Courier New", monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-size: 0.85em;
+            margin-top: 10px;
+            overflow-x: auto;
+        }
+        .metadata {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 10px;
+            border-top: 1px dashed #eee;
+            padding-top: 10px;
+        }
+        .metadata span {
+            margin-right: 15px;
+            display: inline-block;
+        }
+        .no-findings {
+            text-align: center;
+            padding: 50px;
+            color: #555;
+            font-size: 1.2em;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 0.8em;
+            color: #aaa;
+        }
+
+        /* --- Dark Mode Styles --- */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #2c2c2c; /* Dark background */
+                color: #e0e0e0; /* Light text */
+            }
+            .container {
+                background: #3c3c3c; /* Slightly lighter dark for container */
+                box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            }
+            h1 {
+                color: #f5f5f5;
+            }
+            .summary {
+                background-color: #4a4a4a;
+            }
+            .summary-item h2 {
+                color: #ccc;
+            }
+            .summary-item p {
+                color: #f0f0f0;
+            }
+            .finding {
+                background-color: #4c4c4c;
+                border: 1px solid #5a5a5a;
+                border-left-color: #e74c3c; /* Keep red border for secrets */
+            }
+            .finding-header h3 {
+                color: #e74c3c; /* Keep red for emphasis */
+            }
+            .finding-header span {
+                color: #bbb;
+            }
+            .finding p {
+                color: #e0e0e0;
+            }
+            .finding strong {
+                color: #f0f0f0;
+            }
+            .code-snippet {
+                background-color: #5a5a5a;
+                color: #e0e0e0;
+            }
+            .metadata {
+                color: #b0b0b0;
+                border-top-color: #5a5a5a;
+            }
+            .footer {
+                color: #999;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gitleaks Security Report</h1>
+        <div class="summary">
+            <div class="summary-item">
+                <h2>Total Findings</h2>
+                <p>{{ len . }}</p>
+            </div>
+            <div class="summary-item">
+                <h2>Report Date</h2>
+                <p>{{ now.Format "2006-01-02 15:04:05" }}</p>
+            </div>
+        </div>
+        {{ if (gt (len .) 0) }}
+            {{ range $i, $finding := . }}
+                <div class="finding">
+                    <div class="finding-header">
+                        <h3>{{ $finding.Description }}</h3>
+                        <span>Rule ID: <strong>{{ $finding.RuleID }}</strong></span>
+                    </div>
+                    <p><strong>File:</strong> {{ $finding.File }}:{{ $finding.StartLine }}</p>
+                    <p><strong>Secret:</strong> <span style="color: #e74c3c;">{{ $finding.Secret }}</span></p>
+                    {{- if $finding.Line }}
+                        <div class="code-snippet">
+                            <strong>Context:</strong><br>
+                            {{ $finding.Line }}
+                        </div>
+                    {{- end }}
+                    <div class="metadata">
+                        <span><strong>Commit:</strong> {{ $finding.Commit | printf "%.7s" }}</span>
+                        <span><strong>Author:</strong> {{ $finding.Author }} &lt;{{ $finding.Email }}&gt;</span>
+                        <span><strong>Date:</strong> {{ $finding.Date | date "2006-01-02 15:04" }}</span>
+                        <span><strong>Fingerprint:</strong> {{ $finding.Fingerprint }}</span>
+                    </div>
+                </div>
+            {{ end }}
+        {{ else }}
+            <div class="no-findings">
+                <p>No secrets detected!</p>
+            </div>
+        {{ end }}
+        <div class="footer">
+            Generated by Gitleaks on {{ now.Format "2006-01-02 15:04:05 MST" }}
+        </div>
+    </div>
+</body>
+</html>

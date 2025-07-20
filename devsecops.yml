@@ -86,6 +86,8 @@ devsecops_secrets:
       echo "Starting secret detection with GitLeaks..."
 
       GITLEAKS_RAW_REPORT="gitleaks-raw-report.json"
+      GITLEAKS_HTML_REPORT="gitleaks-report.html"
+      GITLEAKS_HTML_TEMPLATE="/usr/local/share/gitleaks/templates/gitlab-html-report.tmpl"
 
       if [ "$SECRETS_ENABLED" != "true" ]; then
         echo "Secret detection disabled in configuration"
@@ -93,7 +95,7 @@ devsecops_secrets:
         exit 0
       fi
 
-      GITLEAKS_CMD="gitleaks detect --source . --report-format json --report-path ${GITLEAKS_RAW_REPORT} --verbose"
+      GITLEAKS_CMD="gitleaks git --source . --report-format json --report-path ${GITLEAKS_RAW_REPORT} --verbose"
 
       if [ "$SECRETS_REDACT" = "true" ]; then
         GITLEAKS_CMD="$GITLEAKS_CMD --redact"
@@ -148,6 +150,19 @@ devsecops_secrets:
           })
         )
       }' "${GITLEAKS_RAW_REPORT}" > gl-secret-detection-report.json 2>/dev/null || echo "Error converting Gitleaks report to GitLab format."
+
+      # Reexecute the command to generate HTML report.
+      GITLEAKS_CMD_HTML="${GITLEAKS_BASE_CMD} --report-format template --report-template ${GITLEAKS_HTML_TEMPLATE} --report-path ${GITLEAKS_HTML_REPORT} --verbose"
+      echo "Running HTML report generation: $GITLEAKS_CMD_HTML"
+      set +e
+      eval $GITLEAKS_CMD_HTML
+      GITLEAKS_EXIT_CODE_HTML=$?
+      set -e
+
+      if [ ! -f "${GITLEAKS_HTML_REPORT}" ]; then
+          echo "Warning: HTML report was not generated. Creating a placeholder HTML report."
+          echo '<html><body><h1>Report Generation Failed</h1><p>The HTML report could not be generated.</p></body></html>' > "${GITLEAKS_HTML_REPORT}"
+      fi
       
       FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-secret-detection-report.json 2>/dev/null || echo "0")
       
@@ -177,6 +192,7 @@ devsecops_secrets:
     when: always
     paths:
       - gitleaks-raw-report.json
+      - gitleaks-report.html
     reports:
       secret_detection: gl-secret-detection-report.json
   rules:

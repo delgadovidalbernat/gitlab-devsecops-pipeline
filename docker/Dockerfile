@@ -22,7 +22,7 @@ RUN curl -sL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq
 	yq --version
 
 # Install GitLeaks
-ARG GITLEAKS_VERSION=8.21.2
+ARG GITLEAKS_VERSION=8.28.0
 RUN curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | \
 	tar -xz -C /usr/local/bin/ && \
 	chmod +x /usr/local/bin/gitleaks && \
@@ -40,6 +40,9 @@ RUN apk add --no-cache openjdk11-jre-headless && \
 	unzip -q /tmp/dependency-check.zip -d /opt/ && \
 	ln -s /opt/dependency-check/bin/dependency-check.sh /usr/local/bin/dependency-check && \
 	rm /tmp/dependency-check.zip
+
+RUN mkdir -p /usr/local/share/gitleaks/templates/
+COPY templates/gitlab-html-report.tmpl /usr/local/share/gitleaks/templates/gitlab-html-report.tmpl
 
 # Create non-root user for security but keep root for flexibility (for now)
 RUN addgroup -S devsecops && adduser -S devsecops -G devsecops
