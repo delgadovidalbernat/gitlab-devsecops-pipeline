@@ -28,7 +28,7 @@ rules_variable_extractor:
     - echo "Extracting variables from DEVSECOPS_CONFIG..."
     - FAIL_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.fail_on_detection // false')
     - echo "FAIL_ON_SECRET_DETECTION=$FAIL_VALUE" >> variables.env
-    - echo "Variable extracted: FAIL_ON_SECRET_DETECTION=$FAIL_VALUE"
+    - echo "Variable extracted -> FAIL_ON_SECRET_DETECTION=$FAIL_VALUE"
   artifacts:
     reports:
       dotenv: variables.env
