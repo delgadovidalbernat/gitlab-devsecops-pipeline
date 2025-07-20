@@ -1,0 +1,51 @@
+# Basic example of GitLab DevSecOps Pipeline integration
+
+include:
+  - remote: 'https://gitlab.com/bdelgadov/gitlab-devsecops-pipeline/-/raw/main/devsecops.yml'
+
+stages:
+  - build
+  - test  
+  - security
+  - deploy
+
+variables:
+  # Configure DevSecOps pipeline
+  DEVSECOPS_CONFIG: |
+    secrets:
+      enabled: true
+      fail_on_detection: false
+    sast:
+      enabled: true
+      severity_threshold: medium
+    sca:
+      enabled: true
+    dast:
+      enabled: false
+
+# Your regular CI/CD jobs
+build_app:
+  stage: build
+  image: node:18
+  script:
+    - echo "Building application..."
+    - echo "const apiKey = 'sk-test-123456789';" > app.js  # Intentional secret for testing
+  artifacts:
+    paths:
+      - app.js
+
+test_app:
+  stage: test
+  image: node:18
+  script:
+    - echo "Running tests..."
+    - echo "Tests passed!"
+
+deploy_app:
+  stage: deploy
+  script:
+    - echo "Deploying application..."
+  environment:
+    name: production
+  only:
+    - main

@@ -1,0 +1,33 @@
+# Security reports (should not be committed)
+*-report.json
+*-report.html
+*-report.xml
+*.sarif
+
+# Temporary files
+/tmp/
+*.tmp
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+.vale.ini
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+test-results/
+coverage/
+
+# Docker
+.docker/
+
+# Rust (for future security-analyzer)
+target/
+Cargo.lock
+*.pdb

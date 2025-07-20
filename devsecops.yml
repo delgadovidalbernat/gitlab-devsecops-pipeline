@@ -1,0 +1,92 @@
+# GitLab DevSecOps Pipeline v0.1
+# Security-as-a-Service for GitLab CI/CD
+
+stages:
+  - security
+
+variables:
+  DEVSECOPS_VERSION: "0.0.1"
+
+# Base template for all security jobs
+.devsecops_base:
+  stage: security
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache yq curl jq
+    - |
+      # Parse configuration or use defaults
+      if [ -n "$DEVSECOPS_CONFIG" ]; then
+        echo "$DEVSECOPS_CONFIG" > /tmp/devsecops-config.yml
+      else
+        # Default configuration
+        cat > /tmp/devsecops-config.yml << EOF
+      secrets:
+        enabled: true
+        fail_on_detection: false
+      sast:
+        enabled: true
+        severity_threshold: medium
+      sca:
+        enabled: true
+      dast:
+        enabled: false
+      EOF
+      fi
+      echo "🔧 Configuration loaded:"
+      cat /tmp/devsecops-config.yml
+  artifacts:
+    expire_in: 1 week
+    when: always
+
+# Secret Detection with GitLeaks
+devsecops_secrets:
+  extends: .devsecops_base
+  image: zricethezav/gitleaks:latest
+  script:
+    - |
+      echo "🔍 Starting secret detection with GitLeaks..."
+      
+      # Check if secrets scanning is enabled
+      SECRETS_ENABLED=$(yq e '.secrets.enabled // true' /tmp/devsecops-config.yml)
+      if [ "$SECRETS_ENABLED" != "true" ]; then
+        echo "⏭️  Secret detection disabled in configuration"
+        exit 0
+      fi
+      
+      # Run GitLeaks scan
+      echo "🔎 Scanning for secrets..."
+      gitleaks detect \
+        --source . \
+        --format json \
+        --report-path secrets-report.json \
+        --verbose || GITLEAKS_EXIT_CODE=$?
+      
+      # Check results
+      if [ -f secrets-report.json ] && [ -s secrets-report.json ]; then
+        echo "⚠️  Secrets detected!"
+        echo "📄 Report:"
+        cat secrets-report.json | jq '.[0:3]' || cat secrets-report.json
+        
+        # Check if we should fail the pipeline
+        FAIL_ON_DETECTION=$(yq e '.secrets.fail_on_detection // false' /tmp/devsecops-config.yml)
+        if [ "$FAIL_ON_DETECTION" = "true" ]; then
+          echo "❌ Pipeline configured to fail on secret detection"
+          exit 1
+        else
+          echo "⚠️  Secrets found but pipeline continues (fail_on_detection: false)"
+        fi
+      else
+        echo "✅ No secrets detected"
+      fi
+  artifacts:
+    reports:
+      secret_detection: secrets-report.json
+    paths:
+      - secrets-report.json
+    expire_in: 1 week
+    when: always
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
