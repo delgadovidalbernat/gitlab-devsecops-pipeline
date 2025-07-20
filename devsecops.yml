@@ -30,30 +30,34 @@ rules_variable_extractor:
     # Secret Detection
     - FAIL_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.fail_on_detection // false')
     - echo "FAIL_ON_SECRET_DETECTION=$FAIL_VALUE" >> variables.env
-    - echo "Variable extracted FAIL_ON_SECRET_DETECTION=$FAIL_VALUE"
 
     - SECRETS_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.enabled // true')
     - echo "SECRETS_ENABLED=$SECRETS_ENABLED_VALUE" >> variables.env
-    - echo "Variable extracted SECRETS_ENABLED=$SECRETS_ENABLED_VALUE"
 
     - SECRETS_REDACT_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.redact // true')
     - echo "SECRETS_REDACT=$SECRETS_REDACT_VALUE" >> variables.env
-    - echo "Variable extracted SECRETS_REDACT=$SECRETS_REDACT_VALUE"
 
     # SAST
     - SAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.enabled // true')
     - echo "SAST_ENABLED=$SAST_ENABLED_VALUE" >> variables.env
-    - echo "Variable extracted SAST_ENABLED=$SAST_ENABLED_VALUE"
 
     # SCA
     - SCA_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.enabled // true')
     - echo "SCA_ENABLED=$SCA_ENABLED_VALUE" >> variables.env
-    - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
 
     # DAST
     - DAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.enabled // false')
     - echo "DAST_ENABLED=$DAST_ENABLED_VALUE" >> variables.env
+
+    - echo "------------------------------------------"
+    - echo "Variables extracted successfully:"
+    - echo "Variable extracted FAIL_ON_SECRET_DETECTION=$FAIL_VALUE"
+    - echo "Variable extracted SECRETS_ENABLED=$SECRETS_ENABLED_VALUE"
+    - echo "Variable extracted SECRETS_REDACT=$SECRETS_REDACT_VALUE"
+    - echo "Variable extracted SAST_ENABLED=$SAST_ENABLED_VALUE"
+    - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
     - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
+    - echo "------------------------------------------"
 
   artifacts:
     reports:
