@@ -69,7 +69,7 @@ devsecops_secrets:
         GITLEAKS_CMD="$GITLEAKS_CMD --redact"
       fi
 
-      EXCLUDE_PATHS=$(yq e '.secrets.exclude_paths[]? // empty' /tmp/devsecops-config.yml)
+      EXCLUDE_PATHS=$(yq e '.secrets.exclude_paths[]? // [] | .[]' /tmp/devsecops-config.yml)
       for path in $EXCLUDE_PATHS; do
         GITLEAKS_CMD="$GITLEAKS_CMD --exclude-path=$path"
       done
