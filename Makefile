@@ -1,7 +1,6 @@
 # Variables
 IMAGE_NAME := devsecops-tools
 IMAGE_TAG := latest
-DOCKERHUB_USER := delgadovidalbernat
 DOCKERHUB_IMAGE := $(DOCKERHUB_USER)/$(IMAGE_NAME)
 FULL_IMAGE_NAME := $(DOCKERHUB_IMAGE):$(IMAGE_TAG)
 
@@ -14,7 +13,7 @@ DEPENDENCY_CHECK_VERSION := 9.0.8
 GREEN := \033[0;32m
 YELLOW := \033[1;33m
 RED := \033[0;31m
-NC := \033[0m # No Color
+NC := \033[0m
 
 .PHONY: help build test run shell clean push pull info
 
@@ -79,7 +78,6 @@ gitleaks:
 		-w /workspace \
 		$(IMAGE_NAME):$(IMAGE_TAG) \
 		gitleaks detect --source . --verbose
-	@rm -f test-secret.js
 
 gitleaks-report:
 	@echo "$(GREEN)Running GitLeaks with GitLab format report...$(NC)"

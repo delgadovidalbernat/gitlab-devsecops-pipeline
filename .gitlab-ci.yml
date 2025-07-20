@@ -4,17 +4,28 @@ stages:
   - release
 
 variables:
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: "/certs"
-  IMAGE_NAME: "delgadovidalbernat/devsecops-tools"
+  IMAGE_NAME: "$DOCKERHUB_USER/devsecops-tools"
 
-build_image:
-  stage: build
+docker_login:
+  stage: .pre
   image: docker:24.0
   services:
     - docker:24.0-dind
-  # before_script:
-    # - docker login -u delgadovidalbernat -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  before_script:
+    - echo "Logging in to Docker Hub..."
+    - docker login -u "$DOCKERHUB_USER" -p "$DOCKERHUB_PASSWORD"
+  script:
+    - echo "Docker login successful"
+  rules:
+    - if: $DOCKERHUB_USER && $DOCKERHUB_PASSWORD
+
+build_image:
+  extends: docker_login
+  stage: build
+  when: manual
+  image: docker:24.0
+  services:
+    - docker:24.0-dind
   script:
     - |
       echo "Building DevSecOps tools image..."
@@ -26,8 +37,6 @@ build_image:
         --tag "$IMAGE_NAME:$CI_COMMIT_SHA" \
         --tag "$IMAGE_NAME:latest" \
         .
-    - docker push "$IMAGE_NAME:$CI_COMMIT_SHA"
-    - docker push "$IMAGE_NAME:latest"
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -48,14 +57,13 @@ test_image:
     - build_image
 
 release_image:
+  extends: docker_login
   stage: release
+  when: manual
   image: docker:24.0
   services:
     - docker:24.0-dind
-  # before_script:
-  #   - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
-    - docker pull "$IMAGE_NAME:$CI_COMMIT_SHA"
     - docker tag "$IMAGE_NAME:$CI_COMMIT_SHA" "$IMAGE_NAME:$CI_COMMIT_TAG"
     - docker push "$IMAGE_NAME:$CI_COMMIT_TAG"
     - echo "Released image $IMAGE_NAME:$CI_COMMIT_TAG"

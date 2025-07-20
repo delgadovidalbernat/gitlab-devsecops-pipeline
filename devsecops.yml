@@ -1,19 +1,18 @@
 # Security-as-a-Service for GitLab CI/CD
 # This file is designed to be included in other pipelines
-
-
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE
 
 variables:
-  DEVSECOPS_IMAGE: "delgadovidalbernat/devsecops-tools:latest"
+  DEVSECOPS_IMAGE: "$DOCKERHUB_USER/devsecops-tools:latest"
   # Default configuration. The pipeline including this file can override it
   DEVSECOPS_CONFIG: |
     secrets:
       enabled: true
       fail_on_detection: false
       redact: true
+      exclude_paths: []
     sast:
       enabled: true
     sca:
@@ -55,6 +54,7 @@ devsecops_secrets:
   script:
     - |
       echo "Starting secret detection with GitLeaks..."
+
       SECRETS_ENABLED=$(yq e '.secrets.enabled // true' /tmp/devsecops-config.yml)
       if [ "$SECRETS_ENABLED" != "true" ]; then
         echo "Secret detection disabled in configuration"
@@ -62,17 +62,25 @@ devsecops_secrets:
         exit 0
       fi
       
-      # Build GitLeaks command
-      GITLEAKS_CMD="gitleaks detect --source . --report-format gitlab --report-path gl-secret-detection-report.json --verbose"
+      GITLEAKS_CMD="gitleaks detect --source . --report-format json --report-path gl-secret-detection-report.json --verbose"
+
       REDACT_ENABLED=$(yq e '.secrets.redact // true' /tmp/devsecops-config.yml)
       if [ "$REDACT_ENABLED" = "true" ]; then
         GITLEAKS_CMD="$GITLEAKS_CMD --redact"
       fi
+
+      EXCLUDE_PATHS=$(yq e '.secrets.exclude_paths[]? // empty' /tmp/devsecops-config.yml)
+      for path in $EXCLUDE_PATHS; do
+        GITLEAKS_CMD="$GITLEAKS_CMD --exclude-path=$path"
+      done
       
       echo "Running: $GITLEAKS_CMD"
       
-      # Run GitLeaks directly - no Docker needed!
-      eval $GITLEAKS_CMD || GITLEAKS_EXIT_CODE=$?
+      # Run GitLeaks command and capture exit code
+      set +e
+      eval $GITLEAKS_CMD
+      GITLEAKS_EXIT_CODE=$?
+      set -e
       
       # Ensure report exists
       if [ ! -f gl-secret-detection-report.json ]; then
@@ -84,9 +92,19 @@ devsecops_secrets:
       if [ "$FINDINGS_COUNT" -gt 0 ]; then
         echo "Warning: $FINDINGS_COUNT secret(s) detected. Check the Security tab for details."
         
-        # Show summary of findings
+        echo ""
         echo "Summary of detected secrets:"
         jq -r '.vulnerabilities[] | "- \(.category): \(.location.file):\(.location.start_line)"' gl-secret-detection-report.json 2>/dev/null || echo "Could not parse findings"
+        echo ""
+        echo "Check the Security tab in Gitlab for detailed analysis."
+
+        FAIL_ON_DETECTION=$(yq e '.secrets.fail_on_detection // false' /tmp/devsecops-config.yml)
+        if [ "$FAIL_ON_DETECTION" = "true" ]; then
+          echo "Pipeline configured to fail on secret detection"
+          exit 1
+        else
+          echo "Pipeline continues despite secrets (fail_on_detection configured to false)"
+        fi
       else
         echo "Success: No secrets detected"
       fi
@@ -94,11 +112,9 @@ devsecops_secrets:
     reports:
       secret_detection: gl-secret-detection-report.json
   rules:
-    # Rule 1: Fail pipeline if configured to do so
     - if: $CI_PIPELINE_SOURCE && $FAIL_ON_SECRET_DETECTION == "true"
       when: on_success
       allow_failure: false
-    # Rule 2: Default behavior, do not fail pipeline
     - if: $CI_PIPELINE_SOURCE
       when: on_success
       allow_failure: true
