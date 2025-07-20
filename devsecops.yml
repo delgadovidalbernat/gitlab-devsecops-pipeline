@@ -5,7 +5,7 @@ workflow:
     - if: $CI_PIPELINE_SOURCE
 
 variables:
-  DEVSECOPS_IMAGE: "$DOCKERHUB_USER/devsecops-tools:latest"
+  DEVSECOPS_IMAGE: "delgadovidalbernat/devsecops-tools:latest"
   # Default configuration. The pipeline including this file can override it
   DEVSECOPS_CONFIG: |
     secrets:
