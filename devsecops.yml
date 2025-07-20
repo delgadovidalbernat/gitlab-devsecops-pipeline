@@ -86,7 +86,8 @@ devsecops_secrets:
         echo '[]' > gl-secret-detection-report.json
         exit 0
       fi
-      
+
+      GITLEAKS_RAW_REPORT="gitleaks-raw-report.json"
       GITLEAKS_CMD="gitleaks detect --source . --report-format json --report-path gl-secret-detection-report.json --verbose"
 
       if [ "$SECRETS_REDACT" = "true" ]; then
@@ -105,11 +106,43 @@ devsecops_secrets:
       eval $GITLEAKS_CMD
       GITLEAKS_EXIT_CODE=$?
       set -e
-      
-      # Ensure report exists
-      if [ ! -f gl-secret-detection-report.json ]; then
-        echo '{"vulnerabilities": []}' > gl-secret-detection-report.json
+
+      if [ ! -f "${GITLEAKS_RAW_REPORT}" ]; then
+        echo '[]' > "${GITLEAKS_RAW_REPORT}"
       fi
+
+      # Convert raw Gitleaks report to GitLab Secret Detection Report format.
+      jq -c '{
+        "vulnerabilities": (
+          .[] | {
+            id: .Fingerprint,
+            category: "secret_detection",
+            name: .Description,
+            description: "Secret detected by Gitleaks.\nRule: `\(.RuleID)`.\nFile: `\(.File)`.\nLine: `\(.StartLine)`.\nCommit: `\(.Commit[0:7])` by `\(.Author)`.\nCommit Message: \"\(.Message)\".",
+            severity: "High", # You might want to map this based on RuleID for different severities
+            confidence: "High",
+            scanner: {
+              id: "gitleaks",
+              name: "Gitleaks"
+            },
+            location: {
+              file: .File,
+              start_line: .StartLine,
+              end_line: .EndLine,
+              commit: {
+                sha: .Commit
+              }
+            },
+            identifiers: [
+              {
+                type: "gitleaks_rule_id",
+                name: "Gitleaks Rule ID: \(.RuleID)",
+                value: .RuleID
+              }
+            ]
+          }
+        )
+      }' "${GITLEAKS_RAW_REPORT}" > gl-secret-detection-report.json 2>/dev/null || echo "Error converting Gitleaks report to GitLab format."
       
       FINDINGS_COUNT=$(jq 'length' gl-secret-detection-report.json 2>/dev/null || echo "0")
       
@@ -119,7 +152,7 @@ devsecops_secrets:
         echo ""
         echo "----------------------------------------------------"
         echo "Summary of Detected Secrets:"
-        jq -r 'map("- \(.RuleID | ascii_upcase): \(.File):\(.StartLine) (Commit: \(.Commit[0:7]) by \(.Author)) - \"\(.Message)\"") | .[]' gl-secret-detection-report.json 2>/dev/null || echo "Could not parse findings"
+        jq -r '.vulnerabilities[] | "- \(.name): \(.location.file):\(.location.start_line) (Commit: \(.location.commit.sha[0:7]) by \(.description | sub("Secret detected by Gitleaks.*Author: (?<author>[^.]+)\\..*"; "\\(.author)")))"' gl-secret-detection-report.json 2>/dev/null || echo "Could not parse findings for summary."
         echo "----------------------------------------------------"
         echo ""
 
@@ -135,6 +168,10 @@ devsecops_secrets:
         echo "Success: No secrets detected"
       fi
   artifacts:
+    expire_in: 1 week
+    when: always
+    paths:
+      - gitleaks-raw-report.json
     reports:
       secret_detection: gl-secret-detection-report.json
   rules:
