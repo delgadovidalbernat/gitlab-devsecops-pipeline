@@ -41,16 +41,14 @@ RUN apk add --no-cache openjdk11-jre-headless && \
 	ln -s /opt/dependency-check/bin/dependency-check.sh /usr/local/bin/dependency-check && \
 	rm /tmp/dependency-check.zip
 
-# Create non-root user for security
+# Create non-root user for security but keep root for flexibility (for now)
 RUN addgroup -S devsecops && adduser -S devsecops -G devsecops
-USER devsecops
 
-# Set working directory
+RUN git config --global --add safe.directory '*'
+
 WORKDIR /workspace
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 	CMD yq --version && gitleaks version && semgrep --version || exit 1
 
-# Default command
 CMD ["/bin/bash"]

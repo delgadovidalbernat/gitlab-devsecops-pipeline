@@ -73,7 +73,6 @@ shell: run
 
 gitleaks:
 	@echo "$(GREEN)Running GitLeaks on current directory...$(NC)"
-	@echo "const apiKey = 'sk-test-123456789';" > test-secret.js
 	docker run --rm \
 		-v $(PWD):/workspace \
 		-w /workspace \
@@ -83,17 +82,15 @@ gitleaks:
 
 gitleaks-report:
 	@echo "$(GREEN)Running GitLeaks with GitLab format report...$(NC)"
-	@echo "const apiKey = 'sk-test-123456789';" > test-secret.js
 	docker run --rm \
 		-v $(PWD):/workspace \
 		-w /workspace \
 		$(IMAGE_NAME):$(IMAGE_TAG) \
-		gitleaks detect --source . --report-format gitlab --report-path gl-secret-detection-report.json --verbose
+		gitleaks detect --source . --report-format json --report-path gl-secret-detection-report.json --verbose || true
 	@if [ -f gl-secret-detection-report.json ]; then \
 		echo "$(GREEN)Report generated: gl-secret-detection-report.json$(NC)"; \
 		cat gl-secret-detection-report.json | jq .; \
 	fi
-	@rm -f test-secret.js
 
 semgrep:
 	@echo "$(GREEN)Running Semgrep on current directory...$(NC)"
@@ -163,7 +160,6 @@ dev-setup: build test
 simulate-pipeline:
 	@echo "$(GREEN)Simulating GitLab DevSecOps pipeline...$(NC)"
 	@echo "Creating test files..."
-	@echo "const apiKey = 'sk-test-123456789';" > app.js
 	@echo "secrets:\n  enabled: true\n  fail_on_detection: false" > devsecops-config.yml
 	@echo ""
 	@echo "$(YELLOW)Step 1: Variable extraction$(NC)"
@@ -178,7 +174,7 @@ simulate-pipeline:
 		-v $(PWD):/workspace \
 		-w /workspace \
 		$(IMAGE_NAME):$(IMAGE_TAG) \
-		gitleaks detect --source . --report-format gitlab --report-path gl-secret-detection-report.json --verbose || true
+		gitleaks detect --source . --report-format json --report-path gl-secret-detection-report.json --verbose || true
 	@echo ""
 	@echo "$(YELLOW)Results:$(NC)"
 	@if [ -f gl-secret-detection-report.json ]; then \
