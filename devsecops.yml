@@ -20,7 +20,7 @@ variables:
     dast:
       enabled: false
 
-.rules_variable_extractor:
+rules_variable_extractor:
   stage: .pre
   image: alpine:3.18
   script:
@@ -38,7 +38,7 @@ variables:
   stage: security
   image: alpine:3.18
   needs:
-    - job: .rules_variable_extractor
+    - job: rules_variable_extractor
       artifacts: true
   before_script:
     - apk add --no-cache yq jq git docker
