@@ -81,14 +81,15 @@ devsecops_secrets:
     - |
       echo "Starting secret detection with GitLeaks..."
 
+      GITLEAKS_RAW_REPORT="gitleaks-raw-report.json"
+
       if [ "$SECRETS_ENABLED" != "true" ]; then
         echo "Secret detection disabled in configuration"
-        echo '[]' > gl-secret-detection-report.json
+        echo '[]' > "${GITLEAKS_RAW_REPORT}"
         exit 0
       fi
 
-      GITLEAKS_RAW_REPORT="gitleaks-raw-report.json"
-      GITLEAKS_CMD="gitleaks detect --source . --report-format json --report-path gl-secret-detection-report.json --verbose"
+      GITLEAKS_CMD="gitleaks detect --source . --report-format json --report-path ${GITLEAKS_RAW_REPORT} --verbose"
 
       if [ "$SECRETS_REDACT" = "true" ]; then
         GITLEAKS_CMD="$GITLEAKS_CMD --redact"
