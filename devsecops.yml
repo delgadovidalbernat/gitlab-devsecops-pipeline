@@ -115,7 +115,7 @@ devsecops_secrets:
       # Convert raw Gitleaks report to GitLab Secret Detection Report format.
       jq -c '{
         "vulnerabilities": (
-          .[] | {
+          map({
             id: .Fingerprint,
             category: "secret_detection",
             name: .Description,
@@ -141,7 +141,7 @@ devsecops_secrets:
                 value: .RuleID
               }
             ]
-          }
+          })
         )
       }' "${GITLEAKS_RAW_REPORT}" > gl-secret-detection-report.json 2>/dev/null || echo "Error converting Gitleaks report to GitLab format."
       
