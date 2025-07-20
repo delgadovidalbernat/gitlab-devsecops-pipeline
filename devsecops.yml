@@ -95,22 +95,23 @@ devsecops_secrets:
         exit 0
       fi
 
-      GITLEAKS_CMD="gitleaks git --source . --report-format json --report-path ${GITLEAKS_RAW_REPORT} --verbose"
+      GITLEAKS_BASE_CMD="gitleaks git"
 
       if [ "$SECRETS_REDACT" = "true" ]; then
-        GITLEAKS_CMD="$GITLEAKS_CMD --redact"
+        GITLEAKS_BASE_CMD="$GITLEAKS_BASE_CMD --redact"
       fi
 
       EXCLUDE_PATHS=$(yq e '.secrets.exclude_paths[]? // [] | .[]' /tmp/devsecops-config.yml)
       for path in $EXCLUDE_PATHS; do
-        GITLEAKS_CMD="$GITLEAKS_CMD --exclude-path=$path"
+        GITLEAKS_BASE_CMD="$GITLEAKS_BASE_CMD --exclude-path=$path"
       done
       
-      echo "Running: $GITLEAKS_CMD"
+      GITLEAKS_CMD_RAW="${GITLEAKS_BASE_CMD} --report-format json --report-path ${GITLEAKS_RAW_REPORT} --verbose"
+
+      echo "Running raw report generation: $GITLEAKS_CMD_RAW"
       
-      # Run GitLeaks command and capture exit code
       set +e
-      eval $GITLEAKS_CMD
+      eval $GITLEAKS_CMD_RAW
       GITLEAKS_EXIT_CODE=$?
       set -e
 
