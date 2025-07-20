@@ -145,7 +145,7 @@ devsecops_secrets:
         )
       }' "${GITLEAKS_RAW_REPORT}" > gl-secret-detection-report.json 2>/dev/null || echo "Error converting Gitleaks report to GitLab format."
       
-      FINDINGS_COUNT=$(jq 'length' gl-secret-detection-report.json 2>/dev/null || echo "0")
+      FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-secret-detection-report.json 2>/dev/null || echo "0")
       
       if [ "$FINDINGS_COUNT" -gt 0 ]; then
         echo "Warning: $FINDINGS_COUNT secret(s) detected. Check the Security tab for details."
