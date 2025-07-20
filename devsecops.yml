@@ -26,9 +26,35 @@ rules_variable_extractor:
   image: $DEVSECOPS_IMAGE
   script:
     - echo "Extracting variables from DEVSECOPS_CONFIG..."
+
+    # Secret Detection
     - FAIL_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.fail_on_detection // false')
     - echo "FAIL_ON_SECRET_DETECTION=$FAIL_VALUE" >> variables.env
     - echo "Variable extracted FAIL_ON_SECRET_DETECTION=$FAIL_VALUE"
+
+    - SECRETS_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.enabled // true')
+    - echo "SECRETS_ENABLED=$SECRETS_ENABLED_VALUE" >> variables.env
+    - echo "Variable extracted SECRETS_ENABLED=$SECRETS_ENABLED_VALUE"
+
+    - SECRETS_REDACT_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.redact // true')
+    - echo "SECRETS_REDACT=$SECRETS_REDACT_VALUE" >> variables.env
+    - echo "Variable extracted SECRETS_REDACT=$SECRETS_REDACT_VALUE"
+
+    # SAST
+    - SAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.enabled // true')
+    - echo "SAST_ENABLED=$SAST_ENABLED_VALUE" >> variables.env
+    - echo "Variable extracted SAST_ENABLED=$SAST_ENABLED_VALUE"
+
+    # SCA
+    - SCA_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.enabled // true')
+    - echo "SCA_ENABLED=$SCA_ENABLED_VALUE" >> variables.env
+    - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
+
+    # DAST
+    - DAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.enabled // false')
+    - echo "DAST_ENABLED=$DAST_ENABLED_VALUE" >> variables.env
+    - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
+
   artifacts:
     reports:
       dotenv: variables.env
@@ -55,7 +81,6 @@ devsecops_secrets:
     - |
       echo "Starting secret detection with GitLeaks..."
 
-      SECRETS_ENABLED=$(yq e '.secrets.enabled // true' /tmp/devsecops-config.yml)
       if [ "$SECRETS_ENABLED" != "true" ]; then
         echo "Secret detection disabled in configuration"
         echo '{"vulnerabilities": []}' > gl-secret-detection-report.json
@@ -64,8 +89,7 @@ devsecops_secrets:
       
       GITLEAKS_CMD="gitleaks detect --source . --report-format json --report-path gl-secret-detection-report.json --verbose"
 
-      REDACT_ENABLED=$(yq e '.secrets.redact // true' /tmp/devsecops-config.yml)
-      if [ "$REDACT_ENABLED" = "true" ]; then
+      if [ "$SECRETS_REDACT" = "true" ]; then
         GITLEAKS_CMD="$GITLEAKS_CMD --redact"
       fi
 
@@ -98,8 +122,7 @@ devsecops_secrets:
         echo ""
         echo "Check the Security tab in Gitlab for detailed analysis."
 
-        FAIL_ON_DETECTION=$(yq e '.secrets.fail_on_detection // false' /tmp/devsecops-config.yml)
-        if [ "$FAIL_ON_DETECTION" = "true" ]; then
+        if [ "$FAIL_ON_SECRET_DETECTION" = "true" ]; then
           echo "Pipeline configured to fail on secret detection"
           exit 1
         else
