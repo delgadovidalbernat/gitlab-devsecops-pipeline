@@ -1,8 +1,9 @@
 # Variables
 IMAGE_NAME := devsecops-tools
 IMAGE_TAG := latest
-REGISTRY := registry.gitlab.com/bdelgadov/gitlab-devsecops-pipeline
-FULL_IMAGE_NAME := $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+DOCKERHUB_USER := delgadovidalbernat
+DOCKERHUB_IMAGE := $(DOCKERHUB_USER)/$(IMAGE_NAME)
+FULL_IMAGE_NAME := $(DOCKERHUB_IMAGE):$(IMAGE_TAG)
 
 # Docker build arguments
 YQ_VERSION := v4.40.5
@@ -117,13 +118,14 @@ clean:
 	@echo "$(GREEN)Cleanup completed$(NC)"
 
 push:
-	@echo "$(GREEN)Pushing image to registry...$(NC)"
+	@echo "$(GREEN)Pushing image to dockerhub...$(NC)"
 	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(FULL_IMAGE_NAME)
 	docker push $(FULL_IMAGE_NAME)
 	@echo "$(GREEN)Image pushed: $(FULL_IMAGE_NAME)$(NC)"
+	@echo "$(YELLOW)Available at: https://hub.docker.com/r/$(DOCKERHUB_USER)/$(IMAGE_NAME)$(NC)"
 
 pull:
-	@echo "$(GREEN)Pulling image from registry...$(NC)"
+	@echo "$(GREEN)Pulling image from dockerhub...$(NC)"
 	docker pull $(FULL_IMAGE_NAME)
 	docker tag $(FULL_IMAGE_NAME) $(IMAGE_NAME):$(IMAGE_TAG)
 	@echo "$(GREEN)Image pulled: $(FULL_IMAGE_NAME)$(NC)"
@@ -131,7 +133,7 @@ pull:
 info:
 	@echo "$(GREEN)Image Information:$(NC)"
 	@echo "  Name: $(IMAGE_NAME):$(IMAGE_TAG)"
-	@echo "  Registry: $(FULL_IMAGE_NAME)"
+	@echo "  Dockerhub: $(FULL_IMAGE_NAME)"
 	@echo "  Build args:"
 	@echo "    YQ_VERSION: $(YQ_VERSION)"
 	@echo "    GITLEAKS_VERSION: $(GITLEAKS_VERSION)"
@@ -150,7 +152,7 @@ ci-build:
 		--build-arg GITLEAKS_VERSION=$(GITLEAKS_VERSION) \
 		--build-arg DEPENDENCY_CHECK_VERSION=$(DEPENDENCY_CHECK_VERSION) \
 		--tag $(FULL_IMAGE_NAME) \
-		--tag $(REGISTRY)/$(IMAGE_NAME):$(shell git rev-parse --short HEAD) \
+		--tag $(DOCKERHUB_USER)/$(IMAGE_NAME):$(shell git rev-parse --short HEAD) \
 		docker/
 
 dev-setup: build test
