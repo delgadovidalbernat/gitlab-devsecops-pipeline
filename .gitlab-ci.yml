@@ -33,6 +33,13 @@ build_image:
 
 test_image:
   stage: test
+  image: docker:24.0
+  services:
+    - docker:24.0-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_HOST: tcp://docker:2375/
   script:
     - docker run --rm "$LOCAL_IMAGE_BASE:$CI_COMMIT_SHA" /bin/sh -c "yq --version && gitleaks version && semgrep --version && dependency-check --version"
     - echo "All tools are working correctly"
