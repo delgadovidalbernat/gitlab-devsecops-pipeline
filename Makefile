@@ -9,12 +9,10 @@ YQ_VERSION := v4.40.5
 GITLEAKS_VERSION := 8.28.0
 DEPENDENCY_CHECK_VERSION := 9.0.8
 
-CI_COMMIT_SHA ?= local-build
-CI_COMMIT_TAG ?= no-tag
 CI_REGISTRY_IMAGE ?= $(DOCKERHUB_USER)/$(IMAGE_NAME_BASE)
 
-FINAL_IMAGE_SHA_TAG := $(CI_REGISTRY_IMAGE):$(CI_COMMIT_SHA)
-FINAL_IMAGE_LATEST_TAG := $(CI_REGISTRY_IMAGE):$(IMAGE_TAG_DEFAULT)
+BUILD_TAG_SHA := $(CI_REGISTRY_IMAGE):$(CI_COMMIT_SHA)
+BUILD_TAG_LATEST := $(CI_REGISTRY_IMAGE):latest
 
 # Colors for output
 GREEN := \033[0;32m
@@ -43,10 +41,10 @@ build:
 		--build-arg YQ_VERSION=$(YQ_VERSION) \
 		--build-arg GITLEAKS_VERSION=$(GITLEAKS_VERSION) \
 		--build-arg DEPENDENCY_CHECK_VERSION=$(DEPENDENCY_CHECK_VERSION) \
-		--tag $(FINAL_IMAGE_SHA_TAG) \
-		--tag $(FINAL_IMAGE_LATEST_TAG) \
+		--tag $(BUILD_TAG_SHA) \
+		--tag $(BUILD_TAG_LATEST) \
 		.
-	@echo "$(GREEN)Build completed: $(IMAGE_NAME):$(IMAGE_TAG)$(NC)"
+	@echo "$(GREEN)Build completed"
 
 build-no-cache:
 	@echo "$(GREEN)Building DevSecOps tools image (no cache)...$(NC)"
