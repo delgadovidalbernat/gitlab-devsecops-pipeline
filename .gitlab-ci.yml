@@ -4,23 +4,9 @@ stages:
   - release
 
 variables:
-  IMAGE_NAME: "$DOCKERHUB_USER/devsecops-tools"
-
-docker_login:
-  stage: .pre
-  image: docker:24.0
-  services:
-    - docker:24.0-dind
-  before_script:
-    - echo "Logging in to Docker Hub..."
-    - docker login -u "$DOCKERHUB_USER" -p "$DOCKERHUB_PASSWORD"
-  script:
-    - echo "Docker login successful"
-  rules:
-    - if: $DOCKERHUB_USER && $DOCKERHUB_PASSWORD
+  IMAGE_NAME: "registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline"
 
 build_image:
-  extends: docker_login
   stage: build
   when: manual
   image: docker:24.0
@@ -57,7 +43,6 @@ test_image:
     - build_image
 
 release_image:
-  extends: docker_login
   stage: release
   when: manual
   image: docker:24.0

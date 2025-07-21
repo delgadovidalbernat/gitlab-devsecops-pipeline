@@ -5,8 +5,7 @@ workflow:
     - if: $CI_PIPELINE_SOURCE
 
 variables:
-  DEVSECOPS_IMAGE: "delgadovidalbernat/devsecops-tools:latest"
-  # Default configuration. The pipeline including this file can override it
+  DEVSECOPS_IMAGE: "registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline:latest"
   DEVSECOPS_CONFIG: |
     secrets:
       enabled: true
