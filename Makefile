@@ -32,12 +32,13 @@ help:
 build:
 	@echo "$(GREEN)Building DevSecOps tools image...$(NC)"
 	docker build \
+		-f docker/Dockerfile \
 		--build-arg YQ_VERSION=$(YQ_VERSION) \
 		--build-arg GITLEAKS_VERSION=$(GITLEAKS_VERSION) \
 		--build-arg DEPENDENCY_CHECK_VERSION=$(DEPENDENCY_CHECK_VERSION) \
 		--tag $(IMAGE_NAME):$(IMAGE_TAG) \
 		--tag $(IMAGE_NAME):dev \
-		docker/
+		.
 	@echo "$(GREEN)Build completed: $(IMAGE_NAME):$(IMAGE_TAG)$(NC)"
 
 build-no-cache:

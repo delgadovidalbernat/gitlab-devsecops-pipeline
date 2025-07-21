@@ -17,6 +17,7 @@ build_image:
       echo "Building DevSecOps tools image..."
       cd docker
       docker build \
+        -f docker/Dockerfile \
         --build-arg YQ_VERSION=v4.40.5 \
         --build-arg GITLEAKS_VERSION=8.21.2 \
         --build-arg DEPENDENCY_CHECK_VERSION=9.0.8 \
