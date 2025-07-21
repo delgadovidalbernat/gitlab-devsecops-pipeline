@@ -4,6 +4,7 @@ stages:
   - release
 
 variables:
+  LOCAL_IMAGE_BASE: "devsecops-tools"
   IMAGE_NAME: "registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline"
 
 build_image:
@@ -32,13 +33,8 @@ build_image:
 
 test_image:
   stage: test
-  image: "$IMAGE_NAME:$CI_COMMIT_SHA"
   script:
-    - echo "Testing installed tools..."
-    - yq --version
-    - gitleaks version
-    - semgrep --version
-    - dependency-check --version
+    - docker run --rm "$LOCAL_IMAGE_BASE:$CI_COMMIT_SHA" /bin/sh -c "yq --version && gitleaks version && semgrep --version && dependency-check --version"
     - echo "All tools are working correctly"
   needs:
     - build_image
@@ -60,8 +56,10 @@ release_image:
     - echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USER" --password-stdin
     - echo "$CI_REGISTRY_PASSWORD" | docker login --username "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
-    - docker tag "$IMAGE_NAME:$CI_COMMIT_SHA" "$IMAGE_NAME:$CI_COMMIT_TAG"
+    - docker tag "$LOCAL_IMAGE_BASE:$CI_COMMIT_SHA" "$IMAGE_NAME:$CI_COMMIT_TAG"
+    - docker tag "$LOCAL_IMAGE_BASE:$CI_COMMIT_SHA" "$IMAGE_NAME:latest"
     - docker push "$IMAGE_NAME:$CI_COMMIT_TAG"
+    - docker push "$IMAGE_NAME:latest"
     - echo "Released image $IMAGE_NAME:$CI_COMMIT_TAG"
   needs:
     - test_image
