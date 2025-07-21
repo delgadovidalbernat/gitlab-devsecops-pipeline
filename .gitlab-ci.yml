@@ -21,6 +21,7 @@ build_image:
     CI_COMMIT_SHA: "$CI_COMMIT_SHA"
   before_script:
     - echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USER" --password-stdin
+    - echo "$CI_REGISTRY_PASSWORD" | docker login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
     - apk add --no-cache make
     - make
