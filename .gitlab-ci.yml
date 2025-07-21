@@ -1,3 +1,5 @@
+image: buildpack-deps:bullseye
+
 stages:
   - build
   - test
