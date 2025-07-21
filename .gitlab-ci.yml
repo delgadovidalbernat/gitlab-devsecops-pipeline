@@ -15,15 +15,7 @@ build_image:
   script:
     - |
       echo "Building DevSecOps tools image..."
-      cd docker
-      docker build \
-        -f docker/Dockerfile \
-        --build-arg YQ_VERSION=v4.40.5 \
-        --build-arg GITLEAKS_VERSION=8.21.2 \
-        --build-arg DEPENDENCY_CHECK_VERSION=9.0.8 \
-        --tag "$IMAGE_NAME:$CI_COMMIT_SHA" \
-        --tag "$IMAGE_NAME:latest" \
-        .
+      make build
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
