@@ -1,92 +1,204 @@
-# GitLab DevSecOps Pipeline v0.1
 # Security-as-a-Service for GitLab CI/CD
-
-stages:
-  - security
+# This file is designed to be included in other pipelines
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE
 
 variables:
-  DEVSECOPS_VERSION: "0.0.1"
+  DEVSECOPS_IMAGE: "registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline:latest"
+  DEVSECOPS_CONFIG: |
+    secrets:
+      enabled: true
+      fail_on_detection: false
+      redact: true
+      exclude_paths: []
+    sast:
+      enabled: true
+    sca:
+      enabled: true
+    dast:
+      enabled: false
 
-# Base template for all security jobs
-.devsecops_base:
-  stage: security
-  image: alpine:latest
-  before_script:
-    - apk add --no-cache yq curl jq
-    - |
-      # Parse configuration or use defaults
-      if [ -n "$DEVSECOPS_CONFIG" ]; then
-        echo "$DEVSECOPS_CONFIG" > /tmp/devsecops-config.yml
-      else
-        # Default configuration
-        cat > /tmp/devsecops-config.yml << EOF
-      secrets:
-        enabled: true
-        fail_on_detection: false
-      sast:
-        enabled: true
-        severity_threshold: medium
-      sca:
-        enabled: true
-      dast:
-        enabled: false
-      EOF
-      fi
-      echo "🔧 Configuration loaded:"
-      cat /tmp/devsecops-config.yml
-  artifacts:
-    expire_in: 1 week
-    when: always
-
-# Secret Detection with GitLeaks
-devsecops_secrets:
-  extends: .devsecops_base
-  image: zricethezav/gitleaks:latest
+# Job that extracts configuration variables using yq
+rules_variable_extractor:
+  stage: .pre
+  image: $DEVSECOPS_IMAGE
   script:
-    - |
-      echo "🔍 Starting secret detection with GitLeaks..."
-      
-      # Check if secrets scanning is enabled
-      SECRETS_ENABLED=$(yq e '.secrets.enabled // true' /tmp/devsecops-config.yml)
-      if [ "$SECRETS_ENABLED" != "true" ]; then
-        echo "⏭️  Secret detection disabled in configuration"
-        exit 0
-      fi
-      
-      # Run GitLeaks scan
-      echo "🔎 Scanning for secrets..."
-      gitleaks detect \
-        --source . \
-        --format json \
-        --report-path secrets-report.json \
-        --verbose || GITLEAKS_EXIT_CODE=$?
-      
-      # Check results
-      if [ -f secrets-report.json ] && [ -s secrets-report.json ]; then
-        echo "⚠️  Secrets detected!"
-        echo "📄 Report:"
-        cat secrets-report.json | jq '.[0:3]' || cat secrets-report.json
-        
-        # Check if we should fail the pipeline
-        FAIL_ON_DETECTION=$(yq e '.secrets.fail_on_detection // false' /tmp/devsecops-config.yml)
-        if [ "$FAIL_ON_DETECTION" = "true" ]; then
-          echo "❌ Pipeline configured to fail on secret detection"
-          exit 1
-        else
-          echo "⚠️  Secrets found but pipeline continues (fail_on_detection: false)"
-        fi
-      else
-        echo "✅ No secrets detected"
-      fi
+    - echo "Extracting variables from DEVSECOPS_CONFIG..."
+
+    # Secret Detection
+    - FAIL_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.fail_on_detection // false')
+    - echo "FAIL_ON_SECRET_DETECTION=$FAIL_VALUE" >> variables.env
+
+    - SECRETS_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.enabled // true')
+    - echo "SECRETS_ENABLED=$SECRETS_ENABLED_VALUE" >> variables.env
+
+    - SECRETS_REDACT_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.redact // true')
+    - echo "SECRETS_REDACT=$SECRETS_REDACT_VALUE" >> variables.env
+
+    # SAST
+    - SAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.enabled // true')
+    - echo "SAST_ENABLED=$SAST_ENABLED_VALUE" >> variables.env
+
+    # SCA
+    - SCA_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.enabled // true')
+    - echo "SCA_ENABLED=$SCA_ENABLED_VALUE" >> variables.env
+
+    # DAST
+    - DAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.enabled // false')
+    - echo "DAST_ENABLED=$DAST_ENABLED_VALUE" >> variables.env
+
+    - echo "------------------------------------------"
+    - echo "Variables extracted successfully:"
+    - echo "Variable extracted FAIL_ON_SECRET_DETECTION=$FAIL_VALUE"
+    - echo "Variable extracted SECRETS_ENABLED=$SECRETS_ENABLED_VALUE"
+    - echo "Variable extracted SECRETS_REDACT=$SECRETS_REDACT_VALUE"
+    - echo "Variable extracted SAST_ENABLED=$SAST_ENABLED_VALUE"
+    - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
+    - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
+    - echo "------------------------------------------"
+
   artifacts:
     reports:
-      secret_detection: secrets-report.json
-    paths:
-      - secrets-report.json
+      dotenv: variables.env
+
+# Base template for all security jobs
+.devsecops_template:
+  stage: security
+  image: $DEVSECOPS_IMAGE
+  needs:
+    - job: rules_variable_extractor
+      artifacts: true
+  before_script:
+    - echo "$DEVSECOPS_CONFIG" > /tmp/devsecops-config.yml
+    - echo "Configuration loaded:"
+    - cat /tmp/devsecops-config.yml
+  artifacts:
     expire_in: 1 week
     when: always
-  allow_failure: true
+
+# Secret Detection job with GitLeaks
+devsecops_secrets:
+  extends: .devsecops_template
+  script:
+    - |
+      echo "Starting secret detection with GitLeaks..."
+
+      GITLEAKS_RAW_REPORT="gitleaks-raw-report.json"
+      GITLEAKS_HTML_REPORT="gitleaks-report.html"
+      GITLEAKS_HTML_TEMPLATE="/usr/local/share/gitleaks/templates/gitlab-html-report.tmpl"
+
+      if [ "$SECRETS_ENABLED" != "true" ]; then
+        echo "Secret detection disabled in configuration"
+        echo '[]' > "${GITLEAKS_RAW_REPORT}"
+        exit 0
+      fi
+
+      GITLEAKS_BASE_CMD="gitleaks git"
+
+      if [ "$SECRETS_REDACT" = "true" ]; then
+        GITLEAKS_BASE_CMD="$GITLEAKS_BASE_CMD --redact"
+      fi
+
+      EXCLUDE_PATHS=$(yq e '.secrets.exclude_paths[]? // [] | .[]' /tmp/devsecops-config.yml)
+      for path in $EXCLUDE_PATHS; do
+        GITLEAKS_BASE_CMD="$GITLEAKS_BASE_CMD --exclude-path=$path"
+      done
+      
+      GITLEAKS_CMD_RAW="${GITLEAKS_BASE_CMD} --report-format json --report-path ${GITLEAKS_RAW_REPORT} --verbose"
+
+      echo "Running raw report generation: $GITLEAKS_CMD_RAW"
+      
+      set +e
+      eval $GITLEAKS_CMD_RAW
+      GITLEAKS_EXIT_CODE=$?
+      set -e
+
+      if [ ! -f "${GITLEAKS_RAW_REPORT}" ]; then
+        echo '[]' > "${GITLEAKS_RAW_REPORT}"
+      fi
+
+      # Convert raw Gitleaks report to GitLab Secret Detection Report format.
+      jq -c '{
+        "vulnerabilities": (
+          map({
+            id: .Fingerprint,
+            category: "secret_detection",
+            name: .Description,
+            description: "Secret detected by Gitleaks.\nRule: `\(.RuleID)`.\nFile: `\(.File)`.\nLine: `\(.StartLine)`.\nCommit: `\(.Commit[0:7])` by `\(.Author)`.\nCommit Message: \"\(.Message)\".",
+            severity: "High", # You might want to map this based on RuleID for different severities
+            confidence: "High",
+            scanner: {
+              id: "gitleaks",
+              name: "Gitleaks"
+            },
+            location: {
+              file: .File,
+              start_line: .StartLine,
+              end_line: .EndLine,
+              commit: {
+                sha: .Commit
+              }
+            },
+            identifiers: [
+              {
+                type: "gitleaks_rule_id",
+                name: "Gitleaks Rule ID: \(.RuleID)",
+                value: .RuleID
+              }
+            ]
+          })
+        )
+      }' "${GITLEAKS_RAW_REPORT}" > gl-secret-detection-report.json 2>/dev/null || echo "Error converting Gitleaks report to GitLab format."
+
+      # Reexecute the command to generate HTML report.
+      GITLEAKS_CMD_HTML="${GITLEAKS_BASE_CMD} --report-format template --report-template ${GITLEAKS_HTML_TEMPLATE} --report-path ${GITLEAKS_HTML_REPORT} --verbose"
+      echo "Running HTML report generation: $GITLEAKS_CMD_HTML"
+      set +e
+      eval $GITLEAKS_CMD_HTML
+      GITLEAKS_EXIT_CODE_HTML=$?
+      set -e
+
+      if [ ! -f "${GITLEAKS_HTML_REPORT}" ]; then
+          echo "Warning: HTML report was not generated. Creating a placeholder HTML report."
+          echo '<html><body><h1>Report Generation Failed</h1><p>The HTML report could not be generated.</p></body></html>' > "${GITLEAKS_HTML_REPORT}"
+      fi
+      
+      FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-secret-detection-report.json 2>/dev/null || echo "0")
+      
+      if [ "$FINDINGS_COUNT" -gt 0 ]; then
+        echo "Warning: $FINDINGS_COUNT secret(s) detected. Check the Security tab for details."
+        
+        echo ""
+        echo "----------------------------------------------------"
+        echo "Summary of Detected Secrets:"
+        jq -r '.vulnerabilities[] | "- \(.name): \(.location.file):\(.location.start_line) (Commit: \(.location.commit.sha[0:7]) by \(.description | capture("by `(?<author>[^`]+)`").author))"' gl-secret-detection-report.json 2>/dev/null || echo "Could not parse findings for summary."
+        echo "----------------------------------------------------"
+        echo ""
+
+        echo "Check the Security tab in Gitlab for detailed analysis."
+
+        if [ "$FAIL_ON_SECRET_DETECTION" = "true" ]; then
+          echo "Pipeline configured to fail on secret detection"
+          exit 1
+        else
+          echo "Pipeline continues despite secrets (fail_on_detection configured to false)"
+        fi
+      else
+        echo "Success: No secrets detected"
+      fi
+  artifacts:
+    expire_in: 1 week
+    when: always
+    paths:
+      - gitleaks-raw-report.json
+      - gitleaks-report.html
+    reports:
+      secret_detection: gl-secret-detection-report.json
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE && $FAIL_ON_SECRET_DETECTION == "true"
+      when: on_success
+      allow_failure: false
+    - if: $CI_PIPELINE_SOURCE
+      when: on_success
+      allow_failure: true
