@@ -94,7 +94,7 @@ devsecops_secrets:
         exit 0
       fi
 
-      GITLEAKS_BASE_CMD="gitleaks git"
+      GITLEAKS_BASE_CMD="gitleaks detect"
 
       if [ "$SECRETS_REDACT" = "true" ]; then
         GITLEAKS_BASE_CMD="$GITLEAKS_BASE_CMD --redact"
