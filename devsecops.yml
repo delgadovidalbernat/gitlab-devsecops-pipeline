@@ -100,6 +100,14 @@ devsecops_secrets:
         GITLEAKS_BASE_CMD="$GITLEAKS_BASE_CMD --redact"
       fi
 
+      # Start exclude path process
+      EXCLUDE_PATHS=$(yq e '.secrets.exclude_paths // [] | .[]' /tmp/devsecops-config.yml)
+      GITLEAKS_CONFIG_PATH=".gitleaks.toml"
+
+      echo "title = 'Auto-generated config for Gitleaks'" > $GITLEAKS_CONFIG_PATH
+      echo "[extend]" >> $GITLEAKS_CONFIG_PATH
+      echo "useDefault = true" >> $GITLEAKS_CONFIG_PATH
+
       EXCLUDE_PATHS=$(yq e '.secrets.exclude_paths // [] | .[]' /tmp/devsecops-config.yml)
       if [ -n "$EXCLUDE_PATHS" ]; then
         for path in $EXCLUDE_PATHS; do
@@ -109,8 +117,21 @@ devsecops_secrets:
       else
         echo "No paths to exclude for secret detection."
       fi
+
+      if [ -n "$EXCLUDE_PATHS" ]; then
+        echo "" >> $GITLEAKS_CONFIG_PATH
+        echo "[[allowlists]]" >> $GITLEAKS_CONFIG_PATH
+        echo 'description = "Paths excluded from secret detection"' >> $GITLEAKS_CONFIG_PATH
+        echo "paths = [" >> $GITLEAKS_CONFIG_PATH
+        for path in $EXCLUDE_PATHS; do
+          echo "  '''${path}'''," >> $GITLEAKS_CONFIG_PATH
+        done
+        echo "]" >> $GITLEAKS_CONFIG_PATH
+      else
+        echo "No exclude_paths defined, using default rules only."
+      fi
       
-      GITLEAKS_CMD_RAW="${GITLEAKS_BASE_CMD} --report-format json --report-path ${GITLEAKS_RAW_REPORT} --verbose"
+      GITLEAKS_CMD_RAW="${GITLEAKS_BASE_CMD} --config ${GITLEAKS_CONFIG_PATH} --report-format json --report-path ${GITLEAKS_RAW_REPORT} --verbose"
 
       echo "Running raw report generation: $GITLEAKS_CMD_RAW"
       
@@ -157,7 +178,7 @@ devsecops_secrets:
       }' "${GITLEAKS_RAW_REPORT}" > gl-secret-detection-report.json 2>/dev/null || echo "Error converting Gitleaks report to GitLab format."
 
       # Reexecute the command to generate HTML report.
-      GITLEAKS_CMD_HTML="${GITLEAKS_BASE_CMD} --report-format template --report-template ${GITLEAKS_HTML_TEMPLATE} --report-path ${GITLEAKS_HTML_REPORT} --verbose"
+      GITLEAKS_CMD_HTML="${GITLEAKS_BASE_CMD} --config ${GITLEAKS_CONFIG_PATH} --report-format template --report-template ${GITLEAKS_HTML_TEMPLATE} --report-path ${GITLEAKS_HTML_REPORT} --verbose"
       echo "Running HTML report generation: $GITLEAKS_CMD_HTML"
       set +e
       eval $GITLEAKS_CMD_HTML
@@ -198,6 +219,7 @@ devsecops_secrets:
     paths:
       - gitleaks-raw-report.json
       - gitleaks-report.html
+      - .gitleaks.toml
     reports:
       secret_detection: gl-secret-detection-report.json
   rules:
