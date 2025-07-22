@@ -108,16 +108,6 @@ devsecops_secrets:
       echo "[extend]" >> $GITLEAKS_CONFIG_PATH
       echo "useDefault = true" >> $GITLEAKS_CONFIG_PATH
 
-      EXCLUDE_PATHS=$(yq e '.secrets.exclude_paths // [] | .[]' /tmp/devsecops-config.yml)
-      if [ -n "$EXCLUDE_PATHS" ]; then
-        for path in $EXCLUDE_PATHS; do
-          echo "Excluding path: $path"
-          GITLEAKS_BASE_CMD="$GITLEAKS_BASE_CMD --gitleaks-ignore-path=$path"
-        done
-      else
-        echo "No paths to exclude for secret detection."
-      fi
-
       if [ -n "$EXCLUDE_PATHS" ]; then
         echo "" >> $GITLEAKS_CONFIG_PATH
         echo "[[allowlists]]" >> $GITLEAKS_CONFIG_PATH
