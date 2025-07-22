@@ -14,7 +14,8 @@ variables:
       enabled: true
       fail_on_detection: false
       redact: true
-      exclude_paths: []
+      exclude_paths:
+        - .git
     sast:
       enabled: true
       severity_threshold: medium

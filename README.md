@@ -10,12 +10,16 @@ Add this to your `.gitlab-ci.yml`:
 
 ```yaml
 include:
-  - remote: 'https://gitlab.com/bdelgadov/gitlab-devsecops-pipeline/-/raw/main/devsecops.yml'
+  - remote: 'https://gitlab.com/devsecops-hub/gitlab-devsecops-pipeline/-/raw/main/devsecops.yml'
 
 variables:
   DEVSECOPS_CONFIG: |
     secrets:
       enabled: true
+      fail_on_detection: false
+      redact: true
+      exclude_paths:
+        - .git
     sast:
       enabled: true
       severity_threshold: medium
@@ -26,47 +30,121 @@ variables:
 ```
 
 That's it! Your pipeline now includes:
-- **Secret Detection** with GitLeaks
-- **SAST** with Semgrep
-- **SCA** with OWASP Dependency-Check
-- **DAST** with OWASP ZAP
+- **Secret Detection** with GitLeaks ✅
+- **SAST** with Semgrep (coming soon)
+- **SCA** with OWASP Dependency-Check (coming soon)
+- **DAST** with OWASP ZAP (coming soon)
 
 ## Custom Security Tools Image
 
 This project includes a custom Docker image that combines:
 - **Alpine Linux 3.18** (lightweight base)
 - **GitLeaks v8.21.2** (secret detection)
-- **Semgrep** (static analysis)
-- **OWASP Dependency Check v9.0.8** (dependency scanning)
-- **yq, jq, git** (configuration and parsing tools)
+- **Semgrep** (static analysis - planned)
+- **OWASP Dependency Check v9.0.8** (dependency scanning - planned)
 
-Image: `registry.gitlab.com/bdelgadov/gitlab-devsecops-pipeline/devsecops-tools:latest`
+Image: `registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline:latest`
 
 ## 📋 Status
 
 - [x] Secret Detection (GitLeaks)
 - [x] Custom Docker image with all tools
 - [x] Automated image building and testing
+- [x] Configuration via YAML
+- [x] GitLab Security Dashboard integration
+- [x] HTML and JSON reports
 - [ ] SAST (Semgrep)
 - [ ] SCA (OWASP Dependency-Check)  
 - [ ] DAST (OWASP ZAP)
 
 ## 🔧 Configuration
 
-See [docs/configuration.md](docs/configuration.md) for detailed configuration options.
+### Secret Detection Configuration
+
+```yaml
+secrets:
+  enabled: true                    # Enable/disable secret detection
+  fail_on_detection: false         # Fail pipeline when secrets found
+  redact: true                     # Redact secrets in output
+  exclude_paths:                   # Paths to exclude from scanning
+    - .git
+```
+
+### SAST Configuration (planned)
+
+```yaml
+sast:
+  enabled: true
+  severity_threshold: medium       # minimum: low, medium, high, critical
+```
+
+### SCA Configuration (planned)
+
+```yaml
+sca:
+  enabled: true
+  severity_threshold: medium
+```
+
+### DAST Configuration (planned)
+
+```yaml
+dast:
+  enabled: false
+  target_url: "https://your-app.com"
+```
+
+## Features
+
+- **Zero Configuration**: Works out of the box with minimal setup
+- **GitLab Integration**: Native integration with GitLab Security Dashboard
+- **Flexible Configuration**: YAML-based configuration for all tools
+- **Comprehensive Reports**: Both JSON (for GitLab) and HTML (for humans) reports
+- **Exclude Paths**: Fine-grained control over what gets scanned
+- **Fail Control**: Choose whether to fail pipeline on findings
 
 ## Examples
 
-Check out the [examples/](examples/) directory for sample integrations.
+Check out the [examples/](examples/) directory for sample integrations:
+- [Basic Example](examples/basic/) - Simple integration
+- [Advanced Example](examples/advanced/) - Custom configuration (coming soon)
 
 ## Building the Image
 
-The security tools image is automatically built and pushed to the GitLab Container Registry when changes are made to the `docker/` directory.
+The security tools image is automatically built and pushed to the GitLab Container Registry when changes are made.
 
 To build locally:
 ```bash
-cd docker
-docker build -t devsecops-tools .
+make build
 ```
+
+## Pipeline Stages
+
+The security pipeline adds a `security` stage that runs after your existing stages:
+
+1. **Pre-stage**: Configuration extraction
+2. **Security stage**: 
+   - Secret detection (GitLeaks)
+   - SAST (planned)
+   - SCA (planned)
+   - DAST (planned)
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- 📖 [Documentation](docs/)
+- 🐛 [Issue Tracker](../../issues)
+- 💬 [Discussions](../../discussions)
 
 ---
