@@ -104,7 +104,7 @@ devsecops_secrets:
       if [ -n "$EXCLUDE_PATHS" ]; then
         for path in $EXCLUDE_PATHS; do
           echo "Excluding path: $path"
-          GITLEAKS_BASE_CMD="$GITLEAKS_BASE_CMD --exclude-path=$path"
+          GITLEAKS_BASE_CMD="$GITLEAKS_BASE_CMD --gitleaks-ignore-path=$path"
         done
       else
         echo "No paths to exclude for secret detection."
