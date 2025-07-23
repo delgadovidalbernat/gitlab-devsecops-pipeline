@@ -1,4 +1,4 @@
-FROM alpine:3.18
+FROM alpine:3.22.1
 
 LABEL maintainer="Bernat Delgado <bdelgadov@gmail.com>"
 LABEL description="GitLab DevSecOps Tools - Alpine-based security scanning tools"
@@ -16,7 +16,7 @@ RUN apk add --no-cache \
 	&& rm -rf /var/cache/apk/*
 
 # Install yq for YAML parsing
-ARG YQ_VERSION=v4.40.5
+ARG YQ_VERSION=v4.46.1
 RUN curl -sL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o /usr/local/bin/yq && \
 	chmod +x /usr/local/bin/yq && \
 	yq --version
