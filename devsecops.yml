@@ -18,6 +18,7 @@ variables:
       severity_threshold: "medium"  # low, medium, high
       languages: "auto"
       exclude_paths: []
+      fail_on_detection: false
     sca:
       enabled: true
     dast:
@@ -49,6 +50,8 @@ rules_variable_extractor:
     - echo "SAST_SEVERITY_THRESHOLD=$SAST_SEVERITY_VALUE" >> variables.env
     - SAST_LANGUAGES_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.languages // "auto"')
     - echo "SAST_LANGUAGES=$SAST_LANGUAGES_VALUE" >> variables.env
+    - SAST_FAIL_ON_DETECTION_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.fail_on_detection // false')
+    - echo "SAST_FAIL_ON_DETECTION=$SAST_FAIL_ON_DETECTION_VALUE" >> variables.env
 
     # SCA
     - SCA_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.enabled // true')
@@ -274,7 +277,11 @@ devsecops_sast:
         exit 0
       fi
       
-      SEMGREP_CMD="semgrep --oss-only --config=auto --json --output=${SEMGREP_RAW_REPORT}"
+      SEMGREP_CMD="semgrep --gitlab-sast --oss-only --config=auto --json --output=gl-sast-report.json"
+
+      if [ "$SAST_FAIL_ON_DETECTION" = "true" ]; then
+        SEMGREP_CMD="$SEMGREP_CMD --error"
+      fi
       
       case "$SAST_SEVERITY_THRESHOLD" in
         "low")
@@ -379,45 +386,10 @@ devsecops_sast:
       set -e
       
       # Ensure report exists
-      if [ ! -f "${SEMGREP_RAW_REPORT}" ]; then
-        echo '{"results": []}' > "${SEMGREP_RAW_REPORT}"
+      if [ ! -f "gl-sast-report.json" ]; then
+        echo '{"results": []}' > "gl-sast-report.json"
       fi
-      
-      # Convert Semgrep report to GitLab SAST format
-      jq -c '{
-        "vulnerabilities": (
-          .results | map({
-            id: (.check_id + ":" + .path + ":" + (.start.line | tostring)),
-            category: "sast",
-            name: .message,
-            description: ("SAST finding detected by Semgrep.\nRule: `" + .check_id + "`.\nFile: `" + .path + "`.\nLine: `" + (.start.line | tostring) + "`.\nSeverity: " + .extra.severity + ".\nMessage: " + .message),
-            severity: (
-              if .extra.severity == "ERROR" then "High"
-              elif .extra.severity == "WARNING" then "Medium" 
-              elif .extra.severity == "INFO" then "Low"
-              else "Unknown" end
-            ),
-            confidence: "High",
-            scanner: {
-              id: "semgrep",
-              name: "Semgrep"
-            },
-            location: {
-              file: .path,
-              start_line: .start.line,
-              end_line: .end.line
-            },
-            identifiers: [
-              {
-                type: "semgrep_rule_id",
-                name: ("Semgrep Rule ID: " + .check_id),
-                value: .check_id
-              }
-            ]
-          })
-        )
-      }' "${SEMGREP_RAW_REPORT}" > gl-sast-report.json 2>/dev/null || echo "Error converting Semgrep report to GitLab format."
-      
+
       # Report results
       FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-sast-report.json 2>/dev/null || echo "0")
       
@@ -431,7 +403,7 @@ devsecops_sast:
         echo ""
         echo "Check the Security tab in GitLab for detailed analysis."
       else
-        echo "✅ Success: No SAST issues detected"
+        echo "OK - Success: No SAST issues detected"
       fi
   artifacts:
     expire_in: 1 week
