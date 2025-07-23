@@ -7,6 +7,7 @@ workflow:
 variables:
   DEVSECOPS_IMAGE: "registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline:latest"
   DEVSECOPS_CONFIG: |
+    exclude_paths: []
     secrets:
       enabled: true
       fail_on_detection: false
@@ -14,6 +15,9 @@ variables:
       exclude_paths: []
     sast:
       enabled: true
+      severity_threshold: "medium"  # low, medium, high
+      languages: "auto"
+      exclude_paths: []
     sca:
       enabled: true
     dast:
@@ -26,19 +30,25 @@ rules_variable_extractor:
   script:
     - echo "Extracting variables from DEVSECOPS_CONFIG..."
 
+    # Global exclude paths
+    - GLOBAL_EXCLUDE_PATHS=$(echo "$DEVSECOPS_CONFIG" | yq e '.exclude_paths // [] | join(",")' -)
+    - echo "GLOBAL_EXCLUDE_PATHS=$GLOBAL_EXCLUDE_PATHS" >> variables.env
+
     # Secret Detection
     - FAIL_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.fail_on_detection // false')
     - echo "FAIL_ON_SECRET_DETECTION=$FAIL_VALUE" >> variables.env
-
     - SECRETS_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.enabled // true')
     - echo "SECRETS_ENABLED=$SECRETS_ENABLED_VALUE" >> variables.env
-
     - SECRETS_REDACT_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.redact // true')
     - echo "SECRETS_REDACT=$SECRETS_REDACT_VALUE" >> variables.env
 
     # SAST
     - SAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.enabled // true')
     - echo "SAST_ENABLED=$SAST_ENABLED_VALUE" >> variables.env
+    - SAST_SEVERITY_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.severity_threshold // "medium"')
+    - echo "SAST_SEVERITY_THRESHOLD=$SAST_SEVERITY_VALUE" >> variables.env
+    - SAST_LANGUAGES_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.languages // "auto"')
+    - echo "SAST_LANGUAGES=$SAST_LANGUAGES_VALUE" >> variables.env
 
     # SCA
     - SCA_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.enabled // true')
@@ -54,6 +64,8 @@ rules_variable_extractor:
     - echo "Variable extracted SECRETS_ENABLED=$SECRETS_ENABLED_VALUE"
     - echo "Variable extracted SECRETS_REDACT=$SECRETS_REDACT_VALUE"
     - echo "Variable extracted SAST_ENABLED=$SAST_ENABLED_VALUE"
+    - echo "Variable extracted SAST_SEVERITY_THRESHOLD=$SAST_SEVERITY_VALUE"
+    - echo "Variable extracted SAST_LANGUAGES=$SAST_LANGUAGES_VALUE"
     - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
     - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
     - echo "------------------------------------------"
@@ -70,6 +82,23 @@ rules_variable_extractor:
     - job: rules_variable_extractor
       artifacts: true
   before_script:
+    - |
+      combine_exclude_paths() {
+        local tool_name=$1
+        local global_paths="$GLOBAL_EXCLUDE_PATHS"
+        local tool_specific_paths=$(yq e ".${tool_name}.exclude_paths // [] | join(\",\")" /tmp/devsecops-config.yml)
+        
+        if [ -n "$global_paths" ] && [ -n "$tool_specific_paths" ]; then
+            echo "${global_paths},${tool_specific_paths}"
+        elif [ -n "$global_paths" ]; then
+            echo "$global_paths"
+        elif [ -n "$tool_specific_paths" ]; then
+            echo "$tool_specific_paths"
+        else
+            echo ""
+        fi
+      }
+
     - echo "$DEVSECOPS_CONFIG" > /tmp/devsecops-config.yml
     - echo "Configuration loaded:"
     - cat /tmp/devsecops-config.yml
@@ -83,6 +112,9 @@ devsecops_secrets:
   script:
     - |
       echo "Starting secret detection with GitLeaks..."
+
+      COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "secrets")
+      echo "Combined exclude paths: $COMBINED_EXCLUDE_PATHS"
 
       GITLEAKS_RAW_REPORT="gitleaks-raw-report.json"
       GITLEAKS_HTML_REPORT="gitleaks-report.html"
@@ -108,14 +140,18 @@ devsecops_secrets:
       echo "[extend]" >> $GITLEAKS_CONFIG_PATH
       echo "useDefault = true" >> $GITLEAKS_CONFIG_PATH
 
-      if [ -n "$EXCLUDE_PATHS" ]; then
+      if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
         echo "" >> $GITLEAKS_CONFIG_PATH
         echo "[[allowlists]]" >> $GITLEAKS_CONFIG_PATH
         echo 'description = "Paths excluded from secret detection"' >> $GITLEAKS_CONFIG_PATH
         echo "paths = [" >> $GITLEAKS_CONFIG_PATH
-        for path in $EXCLUDE_PATHS; do
-          echo "  '''${path}'''," >> $GITLEAKS_CONFIG_PATH
+
+        echo "$COMBINED_EXCLUDE_PATHS" | tr ',' '\n' | while read -r path; do
+          if [ -n "$path" ]; then
+              echo "  '''${path}'''," >> $GITLEAKS_CONFIG_PATH
+          fi
         done
+
         echo "]" >> $GITLEAKS_CONFIG_PATH
       else
         echo "No exclude_paths defined, using default rules only."
@@ -216,6 +252,169 @@ devsecops_secrets:
     - if: $CI_PIPELINE_SOURCE && $FAIL_ON_SECRET_DETECTION == "true"
       when: on_success
       allow_failure: false
+    - if: $CI_PIPELINE_SOURCE
+      when: on_success
+      allow_failure: true
+
+devsecops_sast:
+  extends: .devsecops_template
+  script:
+    - |
+      echo "Starting SAST analysis with Semgrep..."
+
+      COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "sast")
+      echo "Combined exclude paths: $COMBINED_EXCLUDE_PATHS"
+      
+      SEMGREP_RAW_REPORT="semgrep-raw-report.json"
+      
+      if [ "$SAST_ENABLED" != "true" ]; then
+        echo "SAST analysis disabled in configuration"
+        echo '{"vulnerabilities": []}' > gl-sast-report.json
+        exit 0
+      fi
+      
+      SEMGREP_CMD="semgrep --config=auto --json --output=${SEMGREP_RAW_REPORT}"
+      
+      case "$SAST_SEVERITY_THRESHOLD" in
+        "low")
+          SEMGREP_CMD="$SEMGREP_CMD --severity=INFO --severity=WARNING --severity=ERROR"
+          ;;
+        "medium")
+          SEMGREP_CMD="$SEMGREP_CMD --severity=WARNING --severity=ERROR"
+          ;;
+        "high")
+          SEMGREP_CMD="$SEMGREP_CMD --severity=ERROR"
+          ;;
+      esac
+      
+      # Auto-detect languages if needed.
+      if [ "$SAST_LANGUAGES" = "auto" ]; then
+        echo "Auto-detecting project languages..."
+        
+        if [ -f "package.json" ]; then
+          echo "Detected JavaScript/Node.js project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/javascript --config=p/typescript --config=p/react"
+        fi
+        
+        if [ -f "go.mod" ]; then
+          echo "Detected Go project" 
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/golang"
+        fi
+        
+        if [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
+          echo "Detected Python project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/python --config=p/flask --config=p/django"
+        fi
+        
+        if [ -f "pom.xml" ] || [ -f "build.gradle" ]; then
+          echo "Detected Java project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/java"
+        fi
+        
+        SEMGREP_CMD="$SEMGREP_CMD --config=p/security-audit --config=p/owasp-top-ten"
+      fi
+      
+     
+      # Create .semgrepignore file with exclude paths
+      echo "# Auto-generated .semgrepignore file for Semgrep SAST analysis" > $SEMGREP_IGNORE_FILE
+      echo "# Default excludes" >> $SEMGREP_IGNORE_FILE
+      echo "node_modules/" >> $SEMGREP_IGNORE_FILE
+      echo ".git/" >> $SEMGREP_IGNORE_FILE
+      echo "vendor/" >> $SEMGREP_IGNORE_FILE
+      echo "build/" >> $SEMGREP_IGNORE_FILE
+      echo "dist/" >> $SEMGREP_IGNORE_FILE
+      echo "*.min.js" >> $SEMGREP_IGNORE_FILE
+      echo "*.bundle.js" >> $SEMGREP_IGNORE_FILE
+      
+      # Add user-defined exclude paths
+
+      if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
+        echo "" >> $SEMGREP_IGNORE_FILE
+        echo "# Combined exclude paths" >> $SEMGREP_IGNORE_FILE
+
+        echo "$COMBINED_EXCLUDE_PATHS" | tr ',' '\n' | while read -r path; do
+          if [ -n "$path" ]; then
+              echo "$path" >> $SEMGREP_IGNORE_FILE
+          fi
+        done
+      else
+        echo "No combined exclude_paths defined, using default rules only."
+      fi
+
+      echo "Generated .semgrepignore file:"
+      cat $SEMGREP_IGNORE_FILE
+      
+      echo "Running Semgrep: $SEMGREP_CMD"
+      
+      # Run Semgrep
+      set +e
+      eval $SEMGREP_CMD .
+      SEMGREP_EXIT_CODE=$?
+      set -e
+      
+      # Ensure report exists
+      if [ ! -f "${SEMGREP_RAW_REPORT}" ]; then
+        echo '{"results": []}' > "${SEMGREP_RAW_REPORT}"
+      fi
+      
+      # Convert Semgrep report to GitLab SAST format
+      jq -c '{
+        "vulnerabilities": (
+          .results | map({
+            id: (.check_id + ":" + .path + ":" + (.start.line | tostring)),
+            category: "sast",
+            name: .message,
+            description: ("SAST finding detected by Semgrep.\nRule: `" + .check_id + "`.\nFile: `" + .path + "`.\nLine: `" + (.start.line | tostring) + "`.\nSeverity: " + .extra.severity + ".\nMessage: " + .message),
+            severity: (
+              if .extra.severity == "ERROR" then "High"
+              elif .extra.severity == "WARNING" then "Medium" 
+              elif .extra.severity == "INFO" then "Low"
+              else "Unknown" end
+            ),
+            confidence: "High",
+            scanner: {
+              id: "semgrep",
+              name: "Semgrep"
+            },
+            location: {
+              file: .path,
+              start_line: .start.line,
+              end_line: .end.line
+            },
+            identifiers: [
+              {
+                type: "semgrep_rule_id",
+                name: ("Semgrep Rule ID: " + .check_id),
+                value: .check_id
+              }
+            ]
+          })
+        )
+      }' "${SEMGREP_RAW_REPORT}" > gl-sast-report.json 2>/dev/null || echo "Error converting Semgrep report to GitLab format."
+      
+      # Report results
+      FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-sast-report.json 2>/dev/null || echo "0")
+      
+      if [ "$FINDINGS_COUNT" -gt 0 ]; then
+        echo "Warning: $FINDINGS_COUNT SAST finding(s) detected."
+        echo ""
+        echo "----------------------------------------------------"
+        echo "Summary of SAST Findings:"
+        jq -r '.vulnerabilities[] | "- \(.severity): \(.name) in \(.location.file):\(.location.start_line)"' gl-sast-report.json 2>/dev/null || echo "Could not parse findings for summary."
+        echo "----------------------------------------------------"
+        echo ""
+        echo "Check the Security tab in GitLab for detailed analysis."
+      else
+        echo "✅ Success: No SAST issues detected"
+      fi
+  artifacts:
+    expire_in: 1 week
+    when: always
+    paths:
+      - semgrep-raw-report.json
+    reports:
+      sast: gl-sast-report.json
+  rules:
     - if: $CI_PIPELINE_SOURCE
       when: on_success
       allow_failure: true

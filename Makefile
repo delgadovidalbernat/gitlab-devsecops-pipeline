@@ -46,6 +46,18 @@ build:
 		.
 	@echo "$(GREEN)Build completed"
 
+build-local:
+	@echo "$(GREEN)Building DevSecOps tools image (local)...$(NC)"
+	docker build \
+		-f docker/Dockerfile \
+		--build-arg YQ_VERSION=$(YQ_VERSION) \
+		--build-arg GITLEAKS_VERSION=$(GITLEAKS_VERSION) \
+		--build-arg DEPENDENCY_CHECK_VERSION=$(DEPENDENCY_CHECK_VERSION) \
+		--tag $(IMAGE_NAME):$(IMAGE_TAG) \
+		--tag $(IMAGE_NAME):dev \
+		.
+	@echo "$(GREEN)Build completed: $(IMAGE_NAME):$(IMAGE_TAG)$(NC)"
+
 build-no-cache:
 	@echo "$(GREEN)Building DevSecOps tools image (no cache)...$(NC)"
 	docker build --no-cache \
