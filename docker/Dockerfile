@@ -28,9 +28,12 @@ RUN curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS
 	chmod +x /usr/local/bin/gitleaks && \
 	gitleaks version
 
-# Install Semgrep (for future SAST)
+# Install Semgrep
 RUN apk add --no-cache python3 py3-pip && \
-	pip3 install --no-cache-dir semgrep && \
+	python3 -m venv /opt/venv && \
+	. /opt/venv/bin/activate && \
+	pip install --no-cache-dir semgrep && \
+	ln -s /opt/venv/bin/semgrep /usr/local/bin/semgrep && \
 	semgrep --version
 
 # Install OWASP Dependency Check (for future SCA)
