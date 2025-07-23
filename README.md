@@ -145,6 +145,8 @@ This project uses the following external tools in its DevSecOps pipeline:
   License: [LGPL-2.1](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)
   Included as a binary in the Docker image.
 
+  The rules are not included in this repository or its Docker image. By using Semgrep rules, users agree to the terms at https://semgrep.dev/legal/rules-license. This project does not redistribute or bundle these rules.
+
 - **Gitleaks**: [https://github.com/gitleaks/gitleaks](https://github.com/gitleaks/gitleaks)
   License: MIT
   Included as a binary in the Docker image.

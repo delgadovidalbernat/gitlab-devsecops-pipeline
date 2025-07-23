@@ -273,7 +273,7 @@ devsecops_sast:
         exit 0
       fi
       
-      SEMGREP_CMD="semgrep --config=auto --json --output=${SEMGREP_RAW_REPORT}"
+      SEMGREP_CMD="semgrep --oss-only --config=auto --json --output=${SEMGREP_RAW_REPORT}"
       
       case "$SAST_SEVERITY_THRESHOLD" in
         "low")
@@ -293,25 +293,50 @@ devsecops_sast:
         
         if [ -f "package.json" ]; then
           echo "Detected JavaScript/Node.js project"
-          SEMGREP_CMD="$SEMGREP_CMD --config=p/javascript --config=p/typescript --config=p/react"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/javascript --config=p/typescript --config=p/react --config=p/nextjs --config=p/nodejs"
         fi
         
         if [ -f "go.mod" ]; then
           echo "Detected Go project" 
-          SEMGREP_CMD="$SEMGREP_CMD --config=p/golang"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/golang --config=p/gosec"
         fi
         
         if [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
           echo "Detected Python project"
-          SEMGREP_CMD="$SEMGREP_CMD --config=p/python --config=p/flask --config=p/django"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/python --config=p/fastapi --config=p/flask --config=p/django"
         fi
         
         if [ -f "pom.xml" ] || [ -f "build.gradle" ]; then
           echo "Detected Java project"
           SEMGREP_CMD="$SEMGREP_CMD --config=p/java"
         fi
-        
-        SEMGREP_CMD="$SEMGREP_CMD --config=p/security-audit --config=p/owasp-top-ten"
+
+        if [ -f "Dockerfile" ]; then
+          echo "Detected Docker project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/dockerfile  --config=p/docker-compose"
+        fi
+
+        if [ -f "Gemfile" ]; then
+          echo "Detected Ruby project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/ruby"
+        fi
+
+        if [ -f "Cargo.toml" ]; then
+          echo "Detected Rust project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/rust"
+        fi
+
+        if [ -f "composer.json" ]; then
+          echo "Detected PHP project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/php"
+        fi
+
+        if [ -f "build.sbt" ]; then
+          echo "Detected Scala project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/scala"
+        fi
+
+        SEMGREP_CMD="$SEMGREP_CMD --config=p/security-audit --config=p/owasp-top-ten --config=p/cwe-top-25 --config=p/play --config=p/jwt --config=p/lockfile --config=p/findsecbugs --config=p/sql-injection --config=p/command-injection --config=p/xss"
       fi
       
      
