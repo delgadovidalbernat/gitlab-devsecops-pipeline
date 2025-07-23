@@ -265,6 +265,7 @@ devsecops_sast:
       COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "sast")
       echo "Combined exclude paths: $COMBINED_EXCLUDE_PATHS"
       
+      SEMGREP_IGNORE_FILE=".semgrepignore"
       SEMGREP_RAW_REPORT="semgrep-raw-report.json"
       
       if [ "$SAST_ENABLED" != "true" ]; then
