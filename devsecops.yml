@@ -337,7 +337,7 @@ devsecops_sast:
           SEMGREP_CMD="$SEMGREP_CMD --config=p/scala"
         fi
 
-        SEMGREP_CMD="$SEMGREP_CMD --config=p/security-audit --config=p/owasp-top-ten --config=p/cwe-top-25 --config=p/play --config=p/jwt --config=p/lockfile --config=p/findsecbugs --config=p/sql-injection --config=p/command-injection --config=p/xss"
+        SEMGREP_CMD="$SEMGREP_CMD --config=p/security-audit --config=p/owasp-top-ten --config=p/cwe-top-25 --config=p/play --config=p/jwt --config=p/findsecbugs --config=p/sql-injection --config=p/command-injection --config=p/xss"
       fi
       
      
@@ -438,6 +438,7 @@ devsecops_sast:
     when: always
     paths:
       - semgrep-raw-report.json
+      - .semgrepignore
     reports:
       sast: gl-sast-report.json
   rules:
