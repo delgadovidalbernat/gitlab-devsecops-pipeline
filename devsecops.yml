@@ -299,47 +299,47 @@ devsecops_sast:
       if [ "$SAST_LANGUAGES" = "auto" ]; then
         echo "Auto-detecting project languages..."
         
-        if [ -f "package.json" ]; then
+        if [ -n "$(find . -name 'package.json')" ]; then
           echo "Detected JavaScript/Node.js project"
           SEMGREP_CMD="$SEMGREP_CMD --config=p/javascript --config=p/typescript --config=p/react --config=p/nextjs --config=p/nodejs"
         fi
         
-        if [ -f "go.mod" ]; then
+        if [ -n "$(find . -name 'go.mod')" ]; then
           echo "Detected Go project" 
           SEMGREP_CMD="$SEMGREP_CMD --config=p/golang --config=p/gosec"
         fi
         
-        if [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
+        if [ -n "$(find . -name 'requirements.txt')" ] || [ -n "$(find . -name 'pyproject.toml')" ] || [ -n "$(find . -name 'setup.py')" ]; then
           echo "Detected Python project"
           SEMGREP_CMD="$SEMGREP_CMD --config=p/python --config=p/fastapi --config=p/flask --config=p/django"
         fi
         
-        if [ -f "pom.xml" ] || [ -f "build.gradle" ]; then
+        if [ -n "$(find . -name 'pom.xml')" ] || [ -n "$(find . -name 'build.gradle')" ]; then
           echo "Detected Java project"
           SEMGREP_CMD="$SEMGREP_CMD --config=p/java"
         fi
 
-        if [ -f "Dockerfile" ]; then
+        if [ -n "$(find . -name 'Dockerfile')" ]; then
           echo "Detected Docker project"
           SEMGREP_CMD="$SEMGREP_CMD --config=p/dockerfile  --config=p/docker-compose"
         fi
 
-        if [ -f "Gemfile" ]; then
+        if [ -n "$(find . -name 'Gemfile')" ]; then
           echo "Detected Ruby project"
           SEMGREP_CMD="$SEMGREP_CMD --config=p/ruby"
         fi
 
-        if [ -f "Cargo.toml" ]; then
+        if [ -n "$(find . -name 'Cargo.toml')" ]; then
           echo "Detected Rust project"
           SEMGREP_CMD="$SEMGREP_CMD --config=p/rust"
         fi
 
-        if [ -f "composer.json" ]; then
+        if [ -n "$(find . -name 'composer.json')" ]; then
           echo "Detected PHP project"
           SEMGREP_CMD="$SEMGREP_CMD --config=p/php"
         fi
 
-        if [ -f "build.sbt" ]; then
+        if [ -n "$(find . -name 'build.sbt')" ]; then
           echo "Detected Scala project"
           SEMGREP_CMD="$SEMGREP_CMD --config=p/scala"
         fi
