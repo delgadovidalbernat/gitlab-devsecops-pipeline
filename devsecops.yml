@@ -277,7 +277,7 @@ devsecops_sast:
         exit 0
       fi
       
-      SEMGREP_CMD="semgrep --gitlab-sast --oss-only --config=auto --json --output=gl-sast-report.json"
+      SEMGREP_CMD="semgrep --gitlab-sast --oss-only --config=auto --output=gl-sast-report.json"
 
       if [ "$SAST_FAIL_ON_DETECTION" = "true" ]; then
         SEMGREP_CMD="$SEMGREP_CMD --error"
