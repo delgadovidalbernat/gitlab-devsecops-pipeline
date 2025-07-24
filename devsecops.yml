@@ -390,61 +390,266 @@ devsecops_sast:
         echo '{"results": []}' > "gl-sast-report.json"
       fi
 
+      FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-sast-report.json 2>/dev/null || echo "0")
+      HIGH_COUNT=$(jq '[.vulnerabilities[] | select(.severity == "High")] | length' gl-sast-report.json 2>/dev/null || echo "0")
+      MEDIUM_COUNT=$(jq '[.vulnerabilities[] | select(.severity == "Medium")] | length' gl-sast-report.json 2>/dev/null || echo "0")
+      LOW_COUNT=$(jq '[.vulnerabilities[] | select(.severity == "Low")] | length' gl-sast-report.json 2>/dev/null || echo "0")
+
       cat > semgrep-report.html << 'EOF'
       <!DOCTYPE html>
-      <html>
-      <head>
-          <title>Semgrep SAST Report</title>
-          <style>
-              body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-              .container { max-width: 1000px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-              h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
-              .summary { background: #ecf0f1; padding: 15px; border-radius: 5px; margin: 20px 0; }
-              .finding { border: 1px solid #ddd; margin: 15px 0; padding: 15px; border-radius: 5px; }
-              .high { border-left: 5px solid #e74c3c; background: #fdf2f2; }
-              .medium { border-left: 5px solid #f39c12; background: #fef9e7; }
-              .low { border-left: 5px solid #3498db; background: #ebf3fd; }
-              .severity { font-weight: bold; }
-              .high .severity { color: #e74c3c; }
-              .medium .severity { color: #f39c12; }
-              .low .severity { color: #3498db; }
-              .file-info { background: #f8f9fa; padding: 8px; border-radius: 3px; font-family: monospace; margin: 10px 0; }
-              .description { margin: 10px 0; line-height: 1.5; }
-              .no-findings { text-align: center; padding: 40px; color: #27ae60; font-size: 1.2em; }
-          </style>
-      </head>
-      <body>
-          <div class="container">
-              <h1>Semgrep SAST Security Report</h1>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Semgrep SAST Security Report</title>
+            <style>
+                /* Light Mode Styles */
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    margin: 20px;
+                    background-color: #f4f4f4;
+                    color: #333;
+                }
+                .container {
+                    max-width: 1000px;
+                    margin: auto;
+                    background: #fff;
+                    padding: 30px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                }
+                h1 {
+                    color: #2c3e50;
+                    text-align: center;
+                    margin-bottom: 30px;
+                }
+                .summary {
+                    background-color: #e9ecef;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin-bottom: 30px;
+                    display: flex;
+                    justify-content: space-around;
+                    text-align: center;
+                }
+                .summary-item {
+                    flex: 1;
+                    padding: 10px;
+                }
+                .summary-item h2 {
+                    margin: 0;
+                    color: #555;
+                    font-size: 1.2em;
+                }
+                .summary-item p {
+                    margin: 5px 0 0;
+                    font-size: 1.8em;
+                    font-weight: bold;
+                }
+                .finding {
+                    background-color: #fff;
+                    border: 1px solid #ddd;
+                    margin-bottom: 20px;
+                    padding: 15px;
+                    border-radius: 5px;
+                }
+                .finding.high {
+                    border-left: 5px solid #e74c3c;
+                }
+                .finding.medium {
+                    border-left: 5px solid #f39c12;
+                }
+                .finding.low {
+                    border-left: 5px solid #3498db;
+                }
+                .finding-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 10px;
+                }
+                .finding-header h3 {
+                    margin: 0;
+                    font-size: 1.1em;
+                }
+                .finding.high .finding-header h3 {
+                    color: #e74c3c;
+                }
+                .finding.medium .finding-header h3 {
+                    color: #f39c12;
+                }
+                .finding.low .finding-header h3 {
+                    color: #3498db;
+                }
+                .finding-header span {
+                    font-size: 0.9em;
+                    color: #777;
+                }
+                .finding p {
+                    margin: 5px 0;
+                    font-size: 0.9em;
+                }
+                .finding strong {
+                    color: #555;
+                }
+                .code-snippet {
+                    background-color: #f8f9fa;
+                    padding: 10px;
+                    border-radius: 3px;
+                    font-family: "Courier New", monospace;
+                    font-size: 0.85em;
+                    margin-top: 10px;
+                    line-height: 1.4;
+                    border-left: 3px solid #6c757d;
+                }
+                .metadata {
+                    font-size: 0.8em;
+                    color: #888;
+                    margin-top: 10px;
+                    border-top: 1px dashed #eee;
+                    padding-top: 10px;
+                }
+                .metadata span {
+                    margin-right: 15px;
+                    display: inline-block;
+                }
+                .no-findings {
+                    text-align: center;
+                    padding: 50px;
+                    color: #555;
+                    font-size: 1.2em;
+                }
+                .footer {
+                    text-align: center;
+                    margin-top: 40px;
+                    font-size: 0.8em;
+                    color: #aaa;
+                }
+
+                /* Dark Mode Styles */
+                @media (prefers-color-scheme: dark) {
+                    body {
+                        background-color: #2c2c2c;
+                        color: #e0e0e0;
+                    }
+                    .container {
+                        background: #3c3c3c;
+                        box-shadow: 0 0 10px rgba(0,0,0,0.3);
+                    }
+                    h1 {
+                        color: #f5f5f5;
+                    }
+                    .summary {
+                        background-color: #4a4a4a;
+                    }
+                    .summary-item h2 {
+                        color: #ccc;
+                    }
+                    .summary-item p {
+                        color: #f0f0f0;
+                    }
+                    .finding {
+                        background-color: #4c4c4c;
+                        border: 1px solid #5a5a5a;
+                    }
+                    .finding.high {
+                        border-left-color: #e74c3c;
+                    }
+                    .finding.medium {
+                        border-left-color: #f39c12;
+                    }
+                    .finding.low {
+                        border-left-color: #3498db;
+                    }
+                    .finding-header span {
+                        color: #bbb;
+                    }
+                    .finding p {
+                        color: #e0e0e0;
+                    }
+                    .finding strong {
+                        color: #f0f0f0;
+                    }
+                    .code-snippet {
+                        background-color: #5a5a5a;
+                        color: #e0e0e0;
+                        border-left-color: #888;
+                    }
+                    .metadata {
+                        color: #b0b0b0;
+                        border-top-color: #5a5a5a;
+                    }
+                    .footer {
+                        color: #999;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Semgrep SAST Security Report</h1>
+                <div class="summary">
+                    <div class="summary-item">
+                        <h2>Total Findings</h2>
+                        <p>FINDINGS_COUNT_PLACEHOLDER</p>
+                    </div>
+                    <div class="summary-item">
+                        <h2>High Severity</h2>
+                        <p style="color: #e74c3c;">HIGH_COUNT_PLACEHOLDER</p>
+                    </div>
+                    <div class="summary-item">
+                        <h2>Medium Severity</h2>
+                        <p style="color: #f39c12;">MEDIUM_COUNT_PLACEHOLDER</p>
+                    </div>
+                    <div class="summary-item">
+                        <h2>Low Severity</h2>
+                        <p style="color: #3498db;">LOW_COUNT_PLACEHOLDER</p>
+                    </div>
+                </div>
       EOF
+
+      # Replace placeholders with actual counts
+      sed -i "s/FINDINGS_COUNT_PLACEHOLDER/$FINDINGS_COUNT/g" semgrep-report.html
+      sed -i "s/HIGH_COUNT_PLACEHOLDER/$HIGH_COUNT/g" semgrep-report.html
+      sed -i "s/MEDIUM_COUNT_PLACEHOLDER/$MEDIUM_COUNT/g" semgrep-report.html
+      sed -i "s/LOW_COUNT_PLACEHOLDER/$LOW_COUNT/g" semgrep-report.html
 
       if [ "$FINDINGS_COUNT" -gt 0 ]; then
         jq -r '.vulnerabilities[] | 
           "<div class=\"finding " + (.severity | ascii_downcase) + "\">
-            <h3>" + .message + "</h3>
-            <div class=\"severity\">Severity: " + .severity + "</div>
-            <div class=\"file-info\">" + .location.file + ":" + (.location.start_line | tostring) + "</div>
-            <div class=\"description\">" + .description + "</div>
-            <p><strong>Rule:</strong> " + (.identifiers[0].value // "Unknown") + "</p>
+            <div class=\"finding-header\">
+              <h3>" + .message + "</h3>
+              <span>Rule ID: <strong>" + (.identifiers[0].value // "Unknown") + "</strong></span>
+            </div>
+            <p><strong>File:</strong> " + .location.file + ":" + (.location.start_line | tostring) + "</p>
+            <p><strong>Severity:</strong> " + .severity + "</p>
+            <div class=\"code-snippet\">" + (.description | gsub("\\n"; "<br>")) + "</div>
+            <div class=\"metadata\">
+              <span><strong>Category:</strong> " + .category + "</span>
+              <span><strong>Scanner:</strong> " + .scanner.name + "</span>
+              <span><strong>ID:</strong> " + .id + "</span>
+            </div>
           </div>"' gl-sast-report.json >> semgrep-report.html
       else
-        cat >> semgrep-report.html << 'EOF'
-          <div class="no-findings">
-            <p>No SAST vulnerabilities detected!</p>
-            <p>Your code passed all security checks.</p>
-          </div>
+          cat >> semgrep-report.html << 'EOF'
+              <div class="no-findings">
+                  <p>No SAST vulnerabilities detected!</p>
+                  <p>Your code passed all security checks.</p>
+              </div>
       EOF
       fi
 
-      cat >> semgrep-report.html << 'EOF'
+      # Close HTML
+      cat >> semgrep-report.html << EOF
+          <div class="footer">
+              Generated by Semgrep SAST Scanner on $(date)
           </div>
+        </div>
       </body>
       </html>
       EOF
 
-      # Report results
-      FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-sast-report.json 2>/dev/null || echo "0")
-      
       if [ "$FINDINGS_COUNT" -gt 0 ]; then
         echo "Warning: $FINDINGS_COUNT SAST finding(s) detected."
         echo ""
