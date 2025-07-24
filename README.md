@@ -137,14 +137,27 @@ The security pipeline adds a `security` stage that runs after your existing stag
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+## Third-Party Tools
+
+This project uses the following external tools in its DevSecOps pipeline:
+
+- **Semgrep**: [https://semgrep.dev](https://semgrep.dev)
+  License: [LGPL-2.1](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)
+  Included as a binary in the Docker image.
+
+  The rules are not included in this repository or its Docker image. By using Semgrep rules, users agree to the terms at https://semgrep.dev/legal/rules-license. This project does not redistribute or bundle these rules.
+
+- **Gitleaks**: [https://github.com/gitleaks/gitleaks](https://github.com/gitleaks/gitleaks)
+  License: MIT
+  Included as a binary in the Docker image.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+
 ## Support
 
-- 📖 [Documentation](docs/)
 - 🐛 [Issue Tracker](../../issues)
-- 💬 [Discussions](../../discussions)
 
 ---

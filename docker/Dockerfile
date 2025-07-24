@@ -47,7 +47,6 @@ RUN apk add --no-cache openjdk11-jre-headless && \
 RUN mkdir -p /usr/local/share/gitleaks/templates/
 COPY templates/gitleaks/html-report.tmpl /usr/local/share/gitleaks/templates/gitlab-html-report.tmpl
 
-# Create non-root user for security but keep root for flexibility (for now)
 RUN addgroup -S devsecops && adduser -S devsecops -G devsecops
 
 RUN git config --global --add safe.directory '*'

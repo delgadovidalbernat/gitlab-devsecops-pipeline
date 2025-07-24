@@ -7,6 +7,7 @@ workflow:
 variables:
   DEVSECOPS_IMAGE: "registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline:latest"
   DEVSECOPS_CONFIG: |
+    exclude_paths: []
     secrets:
       enabled: true
       fail_on_detection: false
@@ -14,6 +15,10 @@ variables:
       exclude_paths: []
     sast:
       enabled: true
+      severity_threshold: "medium"  # low, medium, high
+      languages: "auto"
+      exclude_paths: []
+      fail_on_detection: false
     sca:
       enabled: true
     dast:
@@ -26,19 +31,27 @@ rules_variable_extractor:
   script:
     - echo "Extracting variables from DEVSECOPS_CONFIG..."
 
+    # Global exclude paths
+    - GLOBAL_EXCLUDE_PATHS=$(echo "$DEVSECOPS_CONFIG" | yq e '.exclude_paths // [] | join(",")' -)
+    - echo "GLOBAL_EXCLUDE_PATHS=$GLOBAL_EXCLUDE_PATHS" >> variables.env
+
     # Secret Detection
     - FAIL_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.fail_on_detection // false')
     - echo "FAIL_ON_SECRET_DETECTION=$FAIL_VALUE" >> variables.env
-
     - SECRETS_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.enabled // true')
     - echo "SECRETS_ENABLED=$SECRETS_ENABLED_VALUE" >> variables.env
-
     - SECRETS_REDACT_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.secrets.redact // true')
     - echo "SECRETS_REDACT=$SECRETS_REDACT_VALUE" >> variables.env
 
     # SAST
     - SAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.enabled // true')
     - echo "SAST_ENABLED=$SAST_ENABLED_VALUE" >> variables.env
+    - SAST_SEVERITY_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.severity_threshold // "medium"')
+    - echo "SAST_SEVERITY_THRESHOLD=$SAST_SEVERITY_VALUE" >> variables.env
+    - SAST_LANGUAGES_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.languages // "auto"')
+    - echo "SAST_LANGUAGES=$SAST_LANGUAGES_VALUE" >> variables.env
+    - SAST_FAIL_ON_DETECTION_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sast.fail_on_detection // false')
+    - echo "SAST_FAIL_ON_DETECTION=$SAST_FAIL_ON_DETECTION_VALUE" >> variables.env
 
     # SCA
     - SCA_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.enabled // true')
@@ -54,6 +67,8 @@ rules_variable_extractor:
     - echo "Variable extracted SECRETS_ENABLED=$SECRETS_ENABLED_VALUE"
     - echo "Variable extracted SECRETS_REDACT=$SECRETS_REDACT_VALUE"
     - echo "Variable extracted SAST_ENABLED=$SAST_ENABLED_VALUE"
+    - echo "Variable extracted SAST_SEVERITY_THRESHOLD=$SAST_SEVERITY_VALUE"
+    - echo "Variable extracted SAST_LANGUAGES=$SAST_LANGUAGES_VALUE"
     - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
     - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
     - echo "------------------------------------------"
@@ -70,6 +85,23 @@ rules_variable_extractor:
     - job: rules_variable_extractor
       artifacts: true
   before_script:
+    - |
+      combine_exclude_paths() {
+        local tool_name=$1
+        local global_paths="$GLOBAL_EXCLUDE_PATHS"
+        local tool_specific_paths=$(yq e ".${tool_name}.exclude_paths // [] | join(\",\")" /tmp/devsecops-config.yml)
+        
+        if [ -n "$global_paths" ] && [ -n "$tool_specific_paths" ]; then
+            echo "${global_paths},${tool_specific_paths}"
+        elif [ -n "$global_paths" ]; then
+            echo "$global_paths"
+        elif [ -n "$tool_specific_paths" ]; then
+            echo "$tool_specific_paths"
+        else
+            echo ""
+        fi
+      }
+
     - echo "$DEVSECOPS_CONFIG" > /tmp/devsecops-config.yml
     - echo "Configuration loaded:"
     - cat /tmp/devsecops-config.yml
@@ -83,6 +115,9 @@ devsecops_secrets:
   script:
     - |
       echo "Starting secret detection with GitLeaks..."
+
+      COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "secrets")
+      echo "Combined exclude paths: $COMBINED_EXCLUDE_PATHS"
 
       GITLEAKS_RAW_REPORT="gitleaks-raw-report.json"
       GITLEAKS_HTML_REPORT="gitleaks-report.html"
@@ -108,14 +143,18 @@ devsecops_secrets:
       echo "[extend]" >> $GITLEAKS_CONFIG_PATH
       echo "useDefault = true" >> $GITLEAKS_CONFIG_PATH
 
-      if [ -n "$EXCLUDE_PATHS" ]; then
+      if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
         echo "" >> $GITLEAKS_CONFIG_PATH
         echo "[[allowlists]]" >> $GITLEAKS_CONFIG_PATH
         echo 'description = "Paths excluded from secret detection"' >> $GITLEAKS_CONFIG_PATH
         echo "paths = [" >> $GITLEAKS_CONFIG_PATH
-        for path in $EXCLUDE_PATHS; do
-          echo "  '''${path}'''," >> $GITLEAKS_CONFIG_PATH
+
+        echo "$COMBINED_EXCLUDE_PATHS" | tr ',' '\n' | while read -r path; do
+          if [ -n "$path" ]; then
+              echo "  '''${path}'''," >> $GITLEAKS_CONFIG_PATH
+          fi
         done
+
         echo "]" >> $GITLEAKS_CONFIG_PATH
       else
         echo "No exclude_paths defined, using default rules only."
@@ -216,6 +255,421 @@ devsecops_secrets:
     - if: $CI_PIPELINE_SOURCE && $FAIL_ON_SECRET_DETECTION == "true"
       when: on_success
       allow_failure: false
+    - if: $CI_PIPELINE_SOURCE
+      when: on_success
+      allow_failure: true
+
+devsecops_sast:
+  extends: .devsecops_template
+  script:
+    - |
+      echo "Starting SAST analysis with Semgrep..."
+
+      COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "sast")
+      echo "Combined exclude paths: $COMBINED_EXCLUDE_PATHS"
+      
+      SEMGREP_IGNORE_FILE=".semgrepignore"
+      
+      if [ "$SAST_ENABLED" != "true" ]; then
+        echo "SAST analysis disabled in configuration"
+        echo '{"vulnerabilities": []}' > gl-sast-report.json
+        exit 0
+      fi
+      
+      SEMGREP_CMD="semgrep --gitlab-sast --oss-only --config=auto --output=gl-sast-report.json"
+
+      if [ "$SAST_FAIL_ON_DETECTION" = "true" ]; then
+        SEMGREP_CMD="$SEMGREP_CMD --error"
+      fi
+      
+      case "$SAST_SEVERITY_THRESHOLD" in
+        "low")
+          SEMGREP_CMD="$SEMGREP_CMD --severity=INFO --severity=WARNING --severity=ERROR"
+          ;;
+        "medium")
+          SEMGREP_CMD="$SEMGREP_CMD --severity=WARNING --severity=ERROR"
+          ;;
+        "high")
+          SEMGREP_CMD="$SEMGREP_CMD --severity=ERROR"
+          ;;
+      esac
+      
+      # Auto-detect languages if needed.
+      if [ "$SAST_LANGUAGES" = "auto" ]; then
+        echo "Auto-detecting project languages..."
+        
+        if [ -n "$(find . -name 'package.json')" ]; then
+          echo "Detected JavaScript/Node.js project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/javascript --config=p/typescript --config=p/react --config=p/nextjs --config=p/nodejs"
+        fi
+        
+        if [ -n "$(find . -name 'go.mod')" ]; then
+          echo "Detected Go project" 
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/golang --config=p/gosec"
+        fi
+        
+        if [ -n "$(find . -name 'requirements.txt')" ] || [ -n "$(find . -name 'pyproject.toml')" ] || [ -n "$(find . -name 'setup.py')" ]; then
+          echo "Detected Python project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/python --config=p/fastapi --config=p/flask --config=p/django"
+        fi
+        
+        if [ -n "$(find . -name 'pom.xml')" ] || [ -n "$(find . -name 'build.gradle')" ]; then
+          echo "Detected Java project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/java"
+        fi
+
+        if [ -n "$(find . -name 'Dockerfile')" ]; then
+          echo "Detected Docker project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/dockerfile  --config=p/docker-compose"
+        fi
+
+        if [ -n "$(find . -name 'Gemfile')" ]; then
+          echo "Detected Ruby project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/ruby"
+        fi
+
+        if [ -n "$(find . -name 'Cargo.toml')" ]; then
+          echo "Detected Rust project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/rust"
+        fi
+
+        if [ -n "$(find . -name 'composer.json')" ]; then
+          echo "Detected PHP project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/php"
+        fi
+
+        if [ -n "$(find . -name 'build.sbt')" ]; then
+          echo "Detected Scala project"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/scala"
+        fi
+
+        SEMGREP_CMD="$SEMGREP_CMD --config=p/security-audit --config=p/owasp-top-ten --config=p/cwe-top-25 --config=p/play --config=p/jwt --config=p/findsecbugs --config=p/sql-injection --config=p/command-injection --config=p/xss"
+      fi
+      
+     
+      # Create .semgrepignore file with exclude paths
+      echo "# Auto-generated .semgrepignore file for Semgrep SAST analysis" > $SEMGREP_IGNORE_FILE
+      echo "# Default excludes" >> $SEMGREP_IGNORE_FILE
+      echo "node_modules/" >> $SEMGREP_IGNORE_FILE
+      echo ".git/" >> $SEMGREP_IGNORE_FILE
+      echo "vendor/" >> $SEMGREP_IGNORE_FILE
+      echo "build/" >> $SEMGREP_IGNORE_FILE
+      echo "dist/" >> $SEMGREP_IGNORE_FILE
+      echo "*.min.js" >> $SEMGREP_IGNORE_FILE
+      echo "*.bundle.js" >> $SEMGREP_IGNORE_FILE
+      
+      # Add user-defined exclude paths
+
+      if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
+        echo "" >> $SEMGREP_IGNORE_FILE
+        echo "# Combined exclude paths" >> $SEMGREP_IGNORE_FILE
+
+        echo "$COMBINED_EXCLUDE_PATHS" | tr ',' '\n' | while read -r path; do
+          if [ -n "$path" ]; then
+              echo "$path" >> $SEMGREP_IGNORE_FILE
+          fi
+        done
+      else
+        echo "No combined exclude_paths defined, using default rules only."
+      fi
+
+      echo "Generated .semgrepignore file:"
+      cat $SEMGREP_IGNORE_FILE
+      
+      echo "Running Semgrep: $SEMGREP_CMD"
+      
+      # Run Semgrep
+      set +e
+      eval $SEMGREP_CMD .
+      SEMGREP_EXIT_CODE=$?
+      set -e
+      
+      # Ensure report exists
+      if [ ! -f "gl-sast-report.json" ]; then
+        echo '{"results": []}' > "gl-sast-report.json"
+      fi
+
+      FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-sast-report.json 2>/dev/null || echo "0")
+      HIGH_COUNT=$(jq '[.vulnerabilities[] | select(.severity == "High")] | length' gl-sast-report.json 2>/dev/null || echo "0")
+      MEDIUM_COUNT=$(jq '[.vulnerabilities[] | select(.severity == "Medium")] | length' gl-sast-report.json 2>/dev/null || echo "0")
+      LOW_COUNT=$(jq '[.vulnerabilities[] | select(.severity == "Low")] | length' gl-sast-report.json 2>/dev/null || echo "0")
+
+      cat > semgrep-report.html << 'EOF'
+      <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Semgrep SAST Security Report</title>
+            <style>
+                /* Light Mode Styles */
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    margin: 20px;
+                    background-color: #f4f4f4;
+                    color: #333;
+                }
+                .container {
+                    max-width: 1000px;
+                    margin: auto;
+                    background: #fff;
+                    padding: 30px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                }
+                h1 {
+                    color: #2c3e50;
+                    text-align: center;
+                    margin-bottom: 30px;
+                }
+                .summary {
+                    background-color: #e9ecef;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin-bottom: 30px;
+                    display: flex;
+                    justify-content: space-around;
+                    text-align: center;
+                }
+                .summary-item {
+                    flex: 1;
+                    padding: 10px;
+                }
+                .summary-item h2 {
+                    margin: 0;
+                    color: #555;
+                    font-size: 1.2em;
+                }
+                .summary-item p {
+                    margin: 5px 0 0;
+                    font-size: 1.8em;
+                    font-weight: bold;
+                }
+                .finding {
+                    background-color: #fff;
+                    border: 1px solid #ddd;
+                    margin-bottom: 20px;
+                    padding: 15px;
+                    border-radius: 5px;
+                }
+                .finding.high {
+                    border-left: 5px solid #e74c3c;
+                }
+                .finding.medium {
+                    border-left: 5px solid #f39c12;
+                }
+                .finding.low {
+                    border-left: 5px solid #3498db;
+                }
+                .finding-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 10px;
+                }
+                .finding-header h3 {
+                    margin: 0;
+                    font-size: 1.1em;
+                }
+                .finding.high .finding-header h3 {
+                    color: #e74c3c;
+                }
+                .finding.medium .finding-header h3 {
+                    color: #f39c12;
+                }
+                .finding.low .finding-header h3 {
+                    color: #3498db;
+                }
+                .finding-header span {
+                    font-size: 0.9em;
+                    color: #777;
+                }
+                .finding p {
+                    margin: 5px 0;
+                    font-size: 0.9em;
+                }
+                .finding strong {
+                    color: #555;
+                }
+                .code-snippet {
+                    background-color: #f8f9fa;
+                    padding: 10px;
+                    border-radius: 3px;
+                    font-family: "Courier New", monospace;
+                    font-size: 0.85em;
+                    margin-top: 10px;
+                    line-height: 1.4;
+                    border-left: 3px solid #6c757d;
+                }
+                .metadata {
+                    font-size: 0.8em;
+                    color: #888;
+                    margin-top: 10px;
+                    border-top: 1px dashed #eee;
+                    padding-top: 10px;
+                }
+                .metadata span {
+                    margin-right: 15px;
+                    display: inline-block;
+                }
+                .no-findings {
+                    text-align: center;
+                    padding: 50px;
+                    color: #555;
+                    font-size: 1.2em;
+                }
+                .footer {
+                    text-align: center;
+                    margin-top: 40px;
+                    font-size: 0.8em;
+                    color: #aaa;
+                }
+
+                /* Dark Mode Styles */
+                @media (prefers-color-scheme: dark) {
+                    body {
+                        background-color: #2c2c2c;
+                        color: #e0e0e0;
+                    }
+                    .container {
+                        background: #3c3c3c;
+                        box-shadow: 0 0 10px rgba(0,0,0,0.3);
+                    }
+                    h1 {
+                        color: #f5f5f5;
+                    }
+                    .summary {
+                        background-color: #4a4a4a;
+                    }
+                    .summary-item h2 {
+                        color: #ccc;
+                    }
+                    .summary-item p {
+                        color: #f0f0f0;
+                    }
+                    .finding {
+                        background-color: #4c4c4c;
+                        border: 1px solid #5a5a5a;
+                    }
+                    .finding.high {
+                        border-left-color: #e74c3c;
+                    }
+                    .finding.medium {
+                        border-left-color: #f39c12;
+                    }
+                    .finding.low {
+                        border-left-color: #3498db;
+                    }
+                    .finding-header span {
+                        color: #bbb;
+                    }
+                    .finding p {
+                        color: #e0e0e0;
+                    }
+                    .finding strong {
+                        color: #f0f0f0;
+                    }
+                    .code-snippet {
+                        background-color: #5a5a5a;
+                        color: #e0e0e0;
+                        border-left-color: #888;
+                    }
+                    .metadata {
+                        color: #b0b0b0;
+                        border-top-color: #5a5a5a;
+                    }
+                    .footer {
+                        color: #999;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Semgrep SAST Security Report</h1>
+                <div class="summary">
+                    <div class="summary-item">
+                        <h2>Total Findings</h2>
+                        <p>FINDINGS_COUNT_PLACEHOLDER</p>
+                    </div>
+                    <div class="summary-item">
+                        <h2>High Severity</h2>
+                        <p style="color: #e74c3c;">HIGH_COUNT_PLACEHOLDER</p>
+                    </div>
+                    <div class="summary-item">
+                        <h2>Medium Severity</h2>
+                        <p style="color: #f39c12;">MEDIUM_COUNT_PLACEHOLDER</p>
+                    </div>
+                    <div class="summary-item">
+                        <h2>Low Severity</h2>
+                        <p style="color: #3498db;">LOW_COUNT_PLACEHOLDER</p>
+                    </div>
+                </div>
+      EOF
+
+      # Replace placeholders with actual counts
+      sed -i "s/FINDINGS_COUNT_PLACEHOLDER/$FINDINGS_COUNT/g" semgrep-report.html
+      sed -i "s/HIGH_COUNT_PLACEHOLDER/$HIGH_COUNT/g" semgrep-report.html
+      sed -i "s/MEDIUM_COUNT_PLACEHOLDER/$MEDIUM_COUNT/g" semgrep-report.html
+      sed -i "s/LOW_COUNT_PLACEHOLDER/$LOW_COUNT/g" semgrep-report.html
+
+      if [ "$FINDINGS_COUNT" -gt 0 ]; then
+        jq -r '.vulnerabilities[] | 
+          "<div class=\"finding " + (.severity | ascii_downcase) + "\">
+            <div class=\"finding-header\">
+              <h3>" + .message + "</h3>
+              <span>Rule ID: <strong>" + (.identifiers[0].value // "Unknown") + "</strong></span>
+            </div>
+            <p><strong>File:</strong> " + .location.file + ":" + (.location.start_line | tostring) + "</p>
+            <p><strong>Severity:</strong> " + .severity + "</p>
+            <div class=\"code-snippet\">" + (.description | gsub("\\n"; "<br>")) + "</div>
+            <div class=\"metadata\">
+              <span><strong>Category:</strong> " + .category + "</span>
+              <span><strong>Scanner:</strong> " + .scanner.name + "</span>
+              <span><strong>ID:</strong> " + .id + "</span>
+            </div>
+          </div>"' gl-sast-report.json >> semgrep-report.html
+      else
+          cat >> semgrep-report.html << 'EOF'
+              <div class="no-findings">
+                  <p>No SAST vulnerabilities detected!</p>
+                  <p>Your code passed all security checks.</p>
+              </div>
+      EOF
+      fi
+
+      # Close HTML
+      cat >> semgrep-report.html << EOF
+          <div class="footer">
+              Generated by gitlab-devsecops-pipelines with the help of SAST Scanner on $(date)
+          </div>
+        </div>
+      </body>
+      </html>
+      EOF
+
+      if [ "$FINDINGS_COUNT" -gt 0 ]; then
+        echo "Warning: $FINDINGS_COUNT SAST finding(s) detected."
+        echo ""
+        echo "----------------------------------------------------"
+        echo "Summary of SAST Findings:"
+        jq -r '.vulnerabilities[] | "- \(.severity): \(.message | split(".")[0]) in \(.location.file):\(.location.start_line)"' gl-sast-report.json 2>/dev/null || echo "Could not parse findings for summary."
+        echo "----------------------------------------------------"
+        echo ""
+        echo "Check the Security tab in GitLab for detailed analysis."
+      else
+        echo "OK - Success: No SAST issues detected"
+      fi
+  artifacts:
+    expire_in: 1 week
+    when: always
+    paths:
+      - semgrep-report.html
+      - .semgrepignore
+    reports:
+      sast: gl-sast-report.json
+  rules:
     - if: $CI_PIPELINE_SOURCE
       when: on_success
       allow_failure: true
