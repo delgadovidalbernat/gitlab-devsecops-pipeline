@@ -29,8 +29,11 @@ DEVSECOPS_CONFIG: |
     exclude_paths:             # Paths to exclude from scanning
       - .git                   # Exclude git directory
   sast:
-    enabled: true              # Enable SAST (when implemented)
-    severity_threshold: medium # Only report medium+ severity issues
+    enabled: true
+    severity_threshold: "medium" # Minimum severity for SAST findings
+    languages: "auto"            # Specific rulesets to use (recommended: "auto")
+    fail_on_detection: false
+    exclude_paths: []
   sca:
     enabled: true              # Enable dependency scanning (when implemented)
   dast:
@@ -44,6 +47,7 @@ DEVSECOPS_CONFIG: |
 3. **Security Stage**: 
    - Configuration extraction (`.pre` stage)
    - Secret detection with GitLeaks
+   - SAST with Semgrep
 4. **Deploy Stage**: Your deployment process
 
 ## Expected output
@@ -68,14 +72,35 @@ Check the Security tab in GitLab for detailed analysis.
 Pipeline continues despite secrets (fail_on_detection configured to false)
 ```
 
+
+The SAST job will:
+- Analyze your codebase for security issues
+- Generate a report in the GitLab Security Dashboard
+- Show findings in the pipeline logs
+- Create an HTML report for easy viewing
+
+```
+Warning: 2 SAST finding(s) detected.
+----------------------------------------------------
+Summary of SAST Findings:
+- Medium: Detected the use of eval() in app.js:7
+- High: Found data from an Express or Next web request flowing to `eval` in app.js:7
+----------------------------------------------------
+```
+
+
 ## Artifacts Generated
 
 After the security stage completes, you'll find:
 
 - `gl-secret-detection-report.json` - GitLab Security Dashboard format
+- `gl-sast-report.json` - GitLab SAST format
 - `gitleaks-report.html` - Human-readable HTML report
 - `gitleaks-raw-report.json` - Raw GitLeaks output
 - `.gitleaks.toml` - Generated GitLeaks configuration
+- `.semgrepignore` - Generated Semgrep ignore file
+- `semgrep-report.html` - Human-readable HTML report for SAST findings
+
 
 ## Testing Secret Detection
 
@@ -86,10 +111,17 @@ To test the secret detection, you can add a test secret to any file:
 const apiKey = "sk-test-123456789abcdef"; // This will be detected
 ```
 
-Or create a `.env` file with:
-```
-DATABASE_PASSWORD=super_secret_password_123
-API_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz
+# Testing SAST
+To test SAST, you can add a known issue in your code:
+
+```javascript
+const express = require('express');
+const app = express();
+
+app.get('/eval', (req, res) => {
+	eval(req.query.code); // Direct user input evaluation
+	res.send('done');
+});
 ```
 
 ## Troubleshooting

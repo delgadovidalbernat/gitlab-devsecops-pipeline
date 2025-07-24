@@ -53,7 +53,7 @@ Image: `registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline:latest`
 - [x] Configuration via YAML
 - [x] GitLab Security Dashboard integration
 - [x] HTML and JSON reports
-- [ ] SAST (Semgrep)
+- [x] SAST (Semgrep)
 - [ ] SCA (OWASP Dependency-Check)  
 - [ ] DAST (OWASP ZAP)
 
@@ -70,12 +70,16 @@ secrets:
     - .git
 ```
 
-### SAST Configuration (planned)
+### SAST Configuration
 
 ```yaml
 sast:
   enabled: true
-  severity_threshold: medium       # minimum: low, medium, high, critical
+  severity_threshold: medium       # low, medium, high
+  languages: "auto"
+  fail_on_detection: false
+  exclude_paths: []
+
 ```
 
 ### SCA Configuration (planned)
@@ -125,7 +129,7 @@ The security pipeline adds a `security` stage that runs after your existing stag
 1. **Pre-stage**: Configuration extraction
 2. **Security stage**: 
    - Secret detection (GitLeaks)
-   - SAST (planned)
+   - SAST (Semgrep)
    - SCA (planned)
    - DAST (planned)
 
