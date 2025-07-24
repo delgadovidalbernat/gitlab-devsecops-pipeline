@@ -462,6 +462,7 @@ devsecops_sast:
     when: always
     paths:
       - semgrep-raw-report.json
+      - semgrep-report.html
       - .semgrepignore
     reports:
       sast: gl-sast-report.json
