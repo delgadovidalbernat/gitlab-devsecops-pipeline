@@ -390,6 +390,58 @@ devsecops_sast:
         echo '{"results": []}' > "gl-sast-report.json"
       fi
 
+      cat > semgrep-report.html << 'EOF'
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>Semgrep SAST Report</title>
+          <style>
+              body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+              .container { max-width: 1000px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+              h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+              .summary { background: #ecf0f1; padding: 15px; border-radius: 5px; margin: 20px 0; }
+              .finding { border: 1px solid #ddd; margin: 15px 0; padding: 15px; border-radius: 5px; }
+              .high { border-left: 5px solid #e74c3c; background: #fdf2f2; }
+              .medium { border-left: 5px solid #f39c12; background: #fef9e7; }
+              .low { border-left: 5px solid #3498db; background: #ebf3fd; }
+              .severity { font-weight: bold; }
+              .high .severity { color: #e74c3c; }
+              .medium .severity { color: #f39c12; }
+              .low .severity { color: #3498db; }
+              .file-info { background: #f8f9fa; padding: 8px; border-radius: 3px; font-family: monospace; margin: 10px 0; }
+              .description { margin: 10px 0; line-height: 1.5; }
+              .no-findings { text-align: center; padding: 40px; color: #27ae60; font-size: 1.2em; }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <h1>Semgrep SAST Security Report</h1>
+      EOF
+
+      if [ "$FINDINGS_COUNT" -gt 0 ]; then
+        jq -r '.vulnerabilities[] | 
+          "<div class=\"finding " + (.severity | ascii_downcase) + "\">
+            <h3>" + .message + "</h3>
+            <div class=\"severity\">Severity: " + .severity + "</div>
+            <div class=\"file-info\">" + .location.file + ":" + (.location.start_line | tostring) + "</div>
+            <div class=\"description\">" + .description + "</div>
+            <p><strong>Rule:</strong> " + (.identifiers[0].value // "Unknown") + "</p>
+          </div>"' gl-sast-report.json >> semgrep-report.html
+      else
+        cat >> semgrep-report.html << 'EOF'
+          <div class="no-findings">
+            <p>No SAST vulnerabilities detected!</p>
+            <p>Your code passed all security checks.</p>
+          </div>
+      EOF
+      fi
+
+      cat >> semgrep-report.html << 'EOF'
+          </div>
+      </body>
+      </html>
+      EOF
+
       # Report results
       FINDINGS_COUNT=$(jq '.vulnerabilities | length' gl-sast-report.json 2>/dev/null || echo "0")
       
@@ -398,7 +450,7 @@ devsecops_sast:
         echo ""
         echo "----------------------------------------------------"
         echo "Summary of SAST Findings:"
-        jq -r '.vulnerabilities[] | "- \(.severity): \(.name) in \(.location.file):\(.location.start_line)"' gl-sast-report.json 2>/dev/null || echo "Could not parse findings for summary."
+        jq -r '.vulnerabilities[] | "- \(.severity): \(.message | split(".")[0]) in \(.location.file):\(.location.start_line)"' gl-sast-report.json 2>/dev/null || echo "Could not parse findings for summary."
         echo "----------------------------------------------------"
         echo ""
         echo "Check the Security tab in GitLab for detailed analysis."
