@@ -305,12 +305,12 @@ devsecops_sast:
         
         if [ -n "$(find . -name 'go.mod')" ]; then
           echo "Detected Go project" 
-          SEMGREP_CMD="$SEMGREP_CMD --config=p/golang --config=p/gosec"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/gosec"
         fi
         
         if [ -n "$(find . -name 'requirements.txt')" ] || [ -n "$(find . -name 'pyproject.toml')" ] || [ -n "$(find . -name 'setup.py')" ]; then
           echo "Detected Python project"
-          SEMGREP_CMD="$SEMGREP_CMD --config=p/python --config=p/fastapi --config=p/flask --config=p/django"
+          SEMGREP_CMD="$SEMGREP_CMD --config=p/python"
         fi
         
         if [ -n "$(find . -name 'pom.xml')" ] || [ -n "$(find . -name 'build.gradle')" ]; then
@@ -343,7 +343,7 @@ devsecops_sast:
           SEMGREP_CMD="$SEMGREP_CMD --config=p/scala"
         fi
 
-        SEMGREP_CMD="$SEMGREP_CMD --config=p/security-audit --config=p/owasp-top-ten --config=p/cwe-top-25 --config=p/play --config=p/jwt --config=p/findsecbugs --config=p/sql-injection --config=p/command-injection --config=p/xss"
+        SEMGREP_CMD="$SEMGREP_CMD --config=p/security-audit"
       fi
       
      
