@@ -793,15 +793,15 @@ devsecops_dast:
 
       echo "Generated ZAP config:"
       cat zap-automation.yaml
-      cp zap-automation.yaml /opt/ZAP_2.16.0/
 
       # Create output directory
       mkdir -p /zap-output
+      cp zap-automation.yaml /zap-output/zap-automation.yaml
 
       # Run ZAP
       echo "Running OWASP ZAP scan..."
       set +e
-      timeout $DAST_MAX_DURATION zap -cmd -autorun zap-automation.yaml
+      timeout $DAST_MAX_DURATION zap -cmd -autorun /zap-output/zap-automation.yaml
       ZAP_EXIT_CODE=$?
       set -e
 
