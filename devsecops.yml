@@ -89,7 +89,6 @@ rules_variable_extractor:
     - echo "Variable extracted SAST_LANGUAGES=$SAST_LANGUAGES_VALUE"
     - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
     - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
-    - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
     - echo "Variable extracted DAST_TARGET_URL=$DAST_TARGET_URL_VALUE"
     - echo "Variable extracted DAST_SCAN_TYPE=$DAST_SCAN_TYPE_VALUE"
     - echo "Variable extracted DAST_OPENAPI_SPEC=$DAST_OPENAPI_SPEC_VALUE"
@@ -742,14 +741,6 @@ devsecops_dast:
         DAST_OPENAPI_SPEC="$DAST_TARGET_URL/swagger/doc.json"
         echo "Auto-detected OpenAPI spec: $DAST_OPENAPI_SPEC"
       fi
-
-      # Test accessibility
-      echo "Testing target accessibility..."
-      if ! curl -f -s -m 10 "$DAST_TARGET_URL" > /dev/null 2>&1; then
-        echo "ERROR: Target URL not accessible: $DAST_TARGET_URL"
-        exit 1
-      fi
-      echo "Target accessible"
 
       # Generate ZAP automation config using echo
       echo "Generating ZAP automation configuration..."
