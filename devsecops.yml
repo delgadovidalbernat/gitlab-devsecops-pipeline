@@ -26,7 +26,7 @@ variables:
       target_url: "auto"  # auto, or specific URL
       scan_type: "api"  # api, baseline, full
       openapi_spec: "auto"  # auto, or specific URL
-      max_scan_duration: "300"  # seconds
+      max_scan_duration: "600"  # seconds
       fail_on_detection: false
       exclude_paths:
         - "/swagger/*"
@@ -788,20 +788,20 @@ devsecops_dast:
       echo "  - type: report" >> zap-automation.yaml
       echo "    parameters:" >> zap-automation.yaml
       echo "      template: traditional-html" >> zap-automation.yaml
-      echo "      reportDir: /zap-output" >> zap-automation.yaml
+      echo "      reportDir: $(pwd)/zap-output" >> zap-automation.yaml
       echo "      reportFile: zap-report.html" >> zap-automation.yaml
 
       echo "Generated ZAP config:"
       cat zap-automation.yaml
 
       # Create output directory
-      mkdir -p /zap-output
-      cp zap-automation.yaml /zap-output/zap-automation.yaml
+      mkdir -p zap-output
+      cp zap-automation.yaml zap-output/zap-automation.yaml
 
       # Run ZAP
       echo "Running OWASP ZAP scan..."
       set +e
-      timeout $DAST_MAX_DURATION zap -cmd -autorun /zap-output/zap-automation.yaml
+      timeout $DAST_MAX_DURATION zap -cmd -autorun $(pwd)/zap-output/zap-automation.yaml
       ZAP_EXIT_CODE=$?
       set -e
 
@@ -816,9 +816,6 @@ devsecops_dast:
         echo '{"site": [{"alerts": []}]}' > gl-dast-report.json
         echo "No DAST report generated"
       fi
-
-      # Copy Zap output directory to relative path /builds/devsecops-hub/test-devsecops
-      cp -r /zap-output/* zap-output/
 
       # Handle fail_on_detection
       if [ "$DAST_FAIL_ON_DETECTION" = "true" ] && [ "$ALERT_COUNT" -gt 0 ]; then
