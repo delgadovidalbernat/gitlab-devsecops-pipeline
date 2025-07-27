@@ -788,14 +788,15 @@ devsecops_dast:
       echo "  - type: report" >> zap-automation.yaml
       echo "    parameters:" >> zap-automation.yaml
       echo "      template: traditional-html" >> zap-automation.yaml
-      echo "      reportDir: /workspace/zap-output" >> zap-automation.yaml
+      echo "      reportDir: /zap-output" >> zap-automation.yaml
       echo "      reportFile: zap-report.html" >> zap-automation.yaml
 
       echo "Generated ZAP config:"
       cat zap-automation.yaml
+      cp zap-automation.yaml /opt/ZAP_2.16.0/./
 
       # Create output directory
-      mkdir -p /workspace/zap-output
+      mkdir -p /zap-output
 
       # Run ZAP
       echo "Running OWASP ZAP scan..."
@@ -807,8 +808,8 @@ devsecops_dast:
       echo "ZAP completed with exit code: $ZAP_EXIT_CODE"
 
       # Create basic GitLab DAST report for integration
-      if [ -f "/workspace/zap-output/zap-report.html" ]; then
-        ALERT_COUNT=$(grep -c "alertname" "/workspace/zap-output/zap-report.html" 2>/dev/null || echo "0")
+      if [ -f "/zap-output/zap-report.html" ]; then
+        ALERT_COUNT=$(grep -c "alertname" "/zap-output/zap-report.html" 2>/dev/null || echo "0")
         echo '{"site": [{"name": "'"$DAST_TARGET_URL"'", "alerts": [{"name": "DAST Scan Results", "riskdesc": "Informational", "desc": "DAST scan completed with '"$ALERT_COUNT"' alerts"}]}]}' > gl-dast-report.json
         echo "DAST scan completed with $ALERT_COUNT alerts"
       else
