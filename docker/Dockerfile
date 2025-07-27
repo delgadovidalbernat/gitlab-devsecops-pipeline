@@ -36,9 +36,26 @@ RUN apk add --no-cache python3 py3-pip && \
 	ln -s /opt/venv/bin/semgrep /usr/local/bin/semgrep && \
 	semgrep --version
 
+# Install OWASP ZAP
+ARG ZAP_VERSION=2.16.0
+RUN curl -sL "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" -o /tmp/zap.tar.gz && \
+	tar -xzf /tmp/zap.tar.gz -C /opt/ && \
+	rm /tmp/zap.tar.gz && \
+	ln -s /opt/ZAP_${ZAP_VERSION}/zap.sh /usr/local/bin/zap
+
+# Download ZAP Python scripts desde Docker oficial
+RUN curl -sL "https://raw.githubusercontent.com/zaproxy/zaproxy/main/docker/zap-baseline.py" -o /usr/local/bin/zap-baseline.py && \
+	curl -sL "https://raw.githubusercontent.com/zaproxy/zaproxy/main/docker/zap-api-scan.py" -o /usr/local/bin/zap-api-scan.py && \
+	curl -sL "https://raw.githubusercontent.com/zaproxy/zaproxy/main/docker/zap-full-scan.py" -o /usr/local/bin/zap-full-scan.py && \
+	chmod +x /usr/local/bin/zap-*.py
+
+# Install Python dependencies for ZAP scripts
+RUN . /opt/venv/bin/activate && \
+	pip install --no-cache-dir python-owasp-zap-v2.4 requests
+
 # Install OWASP Dependency Check (for future SCA)
 ARG DEPENDENCY_CHECK_VERSION=9.0.8
-RUN apk add --no-cache openjdk11-jre-headless && \
+RUN apk add --no-cache openjdk17-jre-headless && \
 	curl -sL "https://github.com/jeremylong/DependencyCheck/releases/download/v${DEPENDENCY_CHECK_VERSION}/dependency-check-${DEPENDENCY_CHECK_VERSION}-release.zip" -o /tmp/dependency-check.zip && \
 	unzip -q /tmp/dependency-check.zip -d /opt/ && \
 	ln -s /opt/dependency-check/bin/dependency-check.sh /usr/local/bin/dependency-check && \

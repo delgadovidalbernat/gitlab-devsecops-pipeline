@@ -22,7 +22,15 @@ variables:
     sca:
       enabled: true
     dast:
-      enabled: false
+      enabled: true
+      target_url: "auto"  # auto, or specific URL
+      scan_type: "api"  # api, baseline, full
+      openapi_spec: "auto"  # auto, or specific URL
+      max_scan_duration: "300"  # seconds
+      fail_on_detection: false
+      exclude_paths:
+        - "/swagger/*"
+        - "/docs/*"
 
 # Job that extracts configuration variables using yq
 rules_variable_extractor:
@@ -60,6 +68,16 @@ rules_variable_extractor:
     # DAST
     - DAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.enabled // false')
     - echo "DAST_ENABLED=$DAST_ENABLED_VALUE" >> variables.env
+    - DAST_TARGET_URL_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.target_url // "auto"')
+    - echo "DAST_TARGET_URL=$DAST_TARGET_URL_VALUE" >> variables.env
+    - DAST_SCAN_TYPE_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.scan_type // "api"')
+    - echo "DAST_SCAN_TYPE=$DAST_SCAN_TYPE_VALUE" >> variables.env
+    - DAST_OPENAPI_SPEC_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.openapi_spec // "auto"')
+    - echo "DAST_OPENAPI_SPEC=$DAST_OPENAPI_SPEC_VALUE" >> variables.env
+    - DAST_MAX_DURATION_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.max_scan_duration // "300"')
+    - echo "DAST_MAX_DURATION=$DAST_MAX_DURATION_VALUE" >> variables.env
+    - DAST_FAIL_ON_DETECTION_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.fail_on_detection // false')
+    - echo "DAST_FAIL_ON_DETECTION=$DAST_FAIL_ON_DETECTION_VALUE" >> variables.env
 
     - echo "------------------------------------------"
     - echo "Variables extracted successfully:"
@@ -71,6 +89,12 @@ rules_variable_extractor:
     - echo "Variable extracted SAST_LANGUAGES=$SAST_LANGUAGES_VALUE"
     - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
     - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
+    - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
+    - echo "Variable extracted DAST_TARGET_URL=$DAST_TARGET_URL_VALUE"
+    - echo "Variable extracted DAST_SCAN_TYPE=$DAST_SCAN_TYPE_VALUE"
+    - echo "Variable extracted DAST_OPENAPI_SPEC=$DAST_OPENAPI_SPEC_VALUE"
+    - echo "Variable extracted DAST_MAX_DURATION=$DAST_MAX_DURATION_VALUE"
+    - echo "Variable extracted DAST_FAIL_ON_DETECTION=$DAST_FAIL_ON_DETECTION_VALUE"
     - echo "------------------------------------------"
 
   artifacts:
@@ -669,6 +693,152 @@ devsecops_sast:
       - .semgrepignore
     reports:
       sast: gl-sast-report.json
+  rules:
+    - if: $CI_PIPELINE_SOURCE
+      when: on_success
+      allow_failure: true
+
+devsecops_dast:
+  extends: .devsecops_template
+  script:
+    - |
+      echo "Starting DAST analysis with OWASP ZAP..."
+
+      COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "dast")
+      echo "Combined exclude paths: $COMBINED_EXCLUDE_PATHS"
+
+      if [ "$DAST_ENABLED" != "true" ]; then
+        echo "DAST analysis disabled in configuration"
+        echo '{"site": [{"alerts": []}]}' > gl-dast-report.json
+        exit 0
+      fi
+
+      # Extract DAST configuration from YAML
+      DAST_TARGET_URL=$(yq e '.dast.target_url // "auto"' /tmp/devsecops-config.yml)
+      DAST_SCAN_TYPE=$(yq e '.dast.scan_type // "api"' /tmp/devsecops-config.yml)
+      DAST_MAX_DURATION=$(yq e '.dast.max_scan_duration // "300"' /tmp/devsecops-config.yml)
+      DAST_OPENAPI_SPEC=$(yq e '.dast.openapi_spec // "auto"' /tmp/devsecops-config.yml)
+      DAST_FAIL_ON_DETECTION=$(yq e '.dast.fail_on_detection // false' /tmp/devsecops-config.yml)
+
+      echo "DAST Configuration:"
+      echo "  Target URL: $DAST_TARGET_URL"
+      echo "  Scan Type: $DAST_SCAN_TYPE"
+      echo "  Max Duration: $DAST_MAX_DURATION seconds"
+      echo "  OpenAPI Spec: $DAST_OPENAPI_SPEC"
+
+      # Auto-detect target URL if needed
+      if [ "$DAST_TARGET_URL" = "auto" ]; then
+        if [ -n "$TARGET_URL" ]; then
+          DAST_TARGET_URL="$TARGET_URL"
+          echo "Auto-detected target URL: $DAST_TARGET_URL"
+        else
+          echo "ERROR: No target URL specified"
+          exit 1
+        fi
+      fi
+
+      # Auto-detect OpenAPI spec URL if needed
+      if [ "$DAST_OPENAPI_SPEC" = "auto" ]; then
+        DAST_OPENAPI_SPEC="$DAST_TARGET_URL/swagger/doc.json"
+        echo "Auto-detected OpenAPI spec: $DAST_OPENAPI_SPEC"
+      fi
+
+      # Test accessibility
+      echo "Testing target accessibility..."
+      if ! curl -f -s -m 10 "$DAST_TARGET_URL" > /dev/null 2>&1; then
+        echo "ERROR: Target URL not accessible: $DAST_TARGET_URL"
+        exit 1
+      fi
+      echo "Target accessible"
+
+      # Generate ZAP automation config using echo
+      echo "Generating ZAP automation configuration..."
+      
+      echo "env:" > zap-automation.yaml
+      echo "  contexts:" >> zap-automation.yaml
+      echo "    - name: dast-context" >> zap-automation.yaml
+      echo "      urls:" >> zap-automation.yaml
+      echo "        - $DAST_TARGET_URL" >> zap-automation.yaml
+      echo "      includePaths:" >> zap-automation.yaml
+      echo "        - $DAST_TARGET_URL.*" >> zap-automation.yaml
+      echo "      excludePaths:" >> zap-automation.yaml
+      
+      # Add exclude paths
+      if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
+        echo "$COMBINED_EXCLUDE_PATHS" | tr ',' '\n' | while read -r exclude_path; do
+          if [ -n "$exclude_path" ]; then
+            echo "        - $DAST_TARGET_URL$exclude_path" >> zap-automation.yaml
+          fi
+        done
+      else
+        echo "        - $DAST_TARGET_URL/swagger.*" >> zap-automation.yaml
+        echo "        - $DAST_TARGET_URL/docs.*" >> zap-automation.yaml
+      fi
+      
+      echo "" >> zap-automation.yaml
+      echo "jobs:" >> zap-automation.yaml
+      echo "  - type: openapi" >> zap-automation.yaml
+      echo "    parameters:" >> zap-automation.yaml
+      echo "      context: dast-context" >> zap-automation.yaml
+      echo "      targetUrl: $DAST_TARGET_URL" >> zap-automation.yaml
+      echo "      apiUrl: $DAST_OPENAPI_SPEC" >> zap-automation.yaml
+      echo "" >> zap-automation.yaml
+      echo "  - type: spider" >> zap-automation.yaml
+      echo "    parameters:" >> zap-automation.yaml
+      echo "      context: dast-context" >> zap-automation.yaml
+      echo "      url: $DAST_TARGET_URL" >> zap-automation.yaml
+      echo "      maxDuration: 2" >> zap-automation.yaml
+      echo "" >> zap-automation.yaml
+      echo "  - type: activeScan" >> zap-automation.yaml
+      echo "    parameters:" >> zap-automation.yaml
+      echo "      context: dast-context" >> zap-automation.yaml
+      echo "      policy: Default Policy" >> zap-automation.yaml
+      echo "" >> zap-automation.yaml
+      echo "  - type: report" >> zap-automation.yaml
+      echo "    parameters:" >> zap-automation.yaml
+      echo "      template: traditional-html" >> zap-automation.yaml
+      echo "      reportDir: /workspace/zap-output" >> zap-automation.yaml
+      echo "      reportFile: zap-report.html" >> zap-automation.yaml
+
+      echo "Generated ZAP config:"
+      cat zap-automation.yaml
+
+      # Create output directory
+      mkdir -p /workspace/zap-output
+
+      # Run ZAP
+      echo "Running OWASP ZAP scan..."
+      set +e
+      timeout $DAST_MAX_DURATION zap -cmd -autorun zap-automation.yaml
+      ZAP_EXIT_CODE=$?
+      set -e
+
+      echo "ZAP completed with exit code: $ZAP_EXIT_CODE"
+
+      # Create basic GitLab DAST report for integration
+      if [ -f "/workspace/zap-output/zap-report.html" ]; then
+        ALERT_COUNT=$(grep -c "alertname" "/workspace/zap-output/zap-report.html" 2>/dev/null || echo "0")
+        echo '{"site": [{"name": "'"$DAST_TARGET_URL"'", "alerts": [{"name": "DAST Scan Results", "riskdesc": "Informational", "desc": "DAST scan completed with '"$ALERT_COUNT"' alerts"}]}]}' > gl-dast-report.json
+        echo "DAST scan completed with $ALERT_COUNT alerts"
+      else
+        echo '{"site": [{"alerts": []}]}' > gl-dast-report.json
+        echo "No DAST report generated"
+      fi
+
+      # Handle fail_on_detection
+      if [ "$DAST_FAIL_ON_DETECTION" = "true" ] && [ "$ALERT_COUNT" -gt 0 ]; then
+        echo "Pipeline configured to fail on DAST detection"
+        exit 1
+      fi
+
+  artifacts:
+    expire_in: 1 week
+    when: always
+    paths:
+      - zap-output/
+      - zap-automation.yaml
+    reports:
+      dast: gl-dast-report.json
   rules:
     - if: $CI_PIPELINE_SOURCE
       when: on_success
