@@ -817,6 +817,9 @@ devsecops_dast:
         echo "No DAST report generated"
       fi
 
+      # Copy Zap output directory to relative path /builds/devsecops-hub/test-devsecops
+      cp -r /zap-output/* zap-output/
+
       # Handle fail_on_detection
       if [ "$DAST_FAIL_ON_DETECTION" = "true" ] && [ "$ALERT_COUNT" -gt 0 ]; then
         echo "Pipeline configured to fail on DAST detection"
