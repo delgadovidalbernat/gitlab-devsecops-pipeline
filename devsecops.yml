@@ -808,7 +808,7 @@ devsecops_dast:
       echo "ZAP completed with exit code: $ZAP_EXIT_CODE"
 
       # Create basic GitLab DAST report for integration
-      if [ -f "/zap-output/zap-report.html" ]; then
+      if [ -f "zap-output/zap-report.html" ]; then
         ALERT_COUNT=$(grep -c "alertname" "/zap-output/zap-report.html" 2>/dev/null || echo "0")
         echo '{"site": [{"name": "'"$DAST_TARGET_URL"'", "alerts": [{"name": "DAST Scan Results", "riskdesc": "Informational", "desc": "DAST scan completed with '"$ALERT_COUNT"' alerts"}]}]}' > gl-dast-report.json
         echo "DAST scan completed with $ALERT_COUNT alerts"
