@@ -793,7 +793,7 @@ devsecops_dast:
 
       echo "Generated ZAP config:"
       cat zap-automation.yaml
-      cp zap-automation.yaml /opt/ZAP_2.16.0/./
+      cp zap-automation.yaml /opt/ZAP_2.16.0/
 
       # Create output directory
       mkdir -p /zap-output
