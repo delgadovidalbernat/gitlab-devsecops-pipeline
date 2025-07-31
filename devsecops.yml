@@ -1061,7 +1061,7 @@ devsecops_sca:
                 // It's safer to parse the data inside a try-catch block.
                 let reportData;
                 try {
-                    reportData = JSON.parse(document.getElementById('report-data').textContent);
+                    reportData = JSON.parse('$REPORT_JSON');
                 } catch (e) {
                     console.error("Failed to parse report data:", e);
                     reportData = { vulnerabilities: [] }; // Fallback to empty data
