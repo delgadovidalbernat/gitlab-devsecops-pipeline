@@ -37,9 +37,13 @@ RUN apk add --no-cache python3 py3-pip && \
 	semgrep --version
 
 # Install OWASP ZAP
-ARG ZAP_VERSION=2.16.0
 RUN apk add --no-cache openjdk17 && \
 	java -version
+ENV JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+RUN echo "JAVA_HOME is $JAVA_HOME" && java -version
+
+ARG ZAP_VERSION=2.16.0
 RUN curl -sL "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" -o /tmp/zap.tar.gz && \
 	tar -xzf /tmp/zap.tar.gz -C /opt/ && \
 	rm /tmp/zap.tar.gz && \
