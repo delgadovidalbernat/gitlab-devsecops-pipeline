@@ -21,6 +21,11 @@ variables:
       fail_on_detection: false
     sca:
       enabled: true
+      severity_threshold: "medium" # low, medium, high, critical
+      fail_on_detection: false
+      ecosystems: "auto" # auto, o rutas específicas
+      recursive: true
+      exclude_paths: []
     dast:
       enabled: true
       target_url: "auto"  # auto, or specific URL
@@ -62,8 +67,16 @@ rules_variable_extractor:
     - echo "SAST_FAIL_ON_DETECTION=$SAST_FAIL_ON_DETECTION_VALUE" >> variables.env
 
     # SCA
-    - SCA_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.enabled // true')
+    - SCA_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.enabled // true' -)
     - echo "SCA_ENABLED=$SCA_ENABLED_VALUE" >> variables.env
+    - SCA_SEVERITY_THRESHOLD_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.severity_threshold // "medium"' -)
+    - echo "SCA_SEVERITY_THRESHOLD=$SCA_SEVERITY_THRESHOLD_VALUE" >> variables.env
+    - SCA_FAIL_ON_DETECTION_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.fail_on_detection // false' -)
+    - echo "SCA_FAIL_ON_DETECTION=$SCA_FAIL_ON_DETECTION_VALUE" >> variables.env
+    - SCA_ECOSYSTEMS_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.ecosystems // "auto"' -)
+    - echo "SCA_ECOSYSTEMS=$SCA_ECOSYSTEMS_VALUE" >> variables.env
+    - SCA_RECURSIVE_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.sca.recursive // true' -)
+    - echo "SCA_RECURSIVE=$SCA_RECURSIVE_VALUE" >> variables.env
 
     # DAST
     - DAST_ENABLED_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.enabled // false')
@@ -88,6 +101,10 @@ rules_variable_extractor:
     - echo "Variable extracted SAST_SEVERITY_THRESHOLD=$SAST_SEVERITY_VALUE"
     - echo "Variable extracted SAST_LANGUAGES=$SAST_LANGUAGES_VALUE"
     - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
+    - echo "Variable extracted SCA_SEVERITY_THRESHOLD=$SCA_SEVERITY_THRESHOLD_VALUE"
+    - echo "Variable extracted SCA_FAIL_ON_DETECTION=$SCA_FAIL_ON_DETECTION_VALUE"
+    - echo "Variable extracted SCA_ECOSYSTEMS=$SCA_ECOSYSTEMS_VALUE"
+    - echo "Variable extracted SCA_RECURSIVE=$SCA_RECURSIVE_VALUE"
     - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
     - echo "Variable extracted DAST_TARGET_URL=$DAST_TARGET_URL_VALUE"
     - echo "Variable extracted DAST_SCAN_TYPE=$DAST_SCAN_TYPE_VALUE"
@@ -831,6 +848,215 @@ devsecops_dast:
       - zap-automation.yaml
     reports:
       dast: gl-dast-report.json
+  rules:
+    - if: $CI_PIPELINE_SOURCE
+      when: on_success
+      allow_failure: true
+
+devsecops_sca:
+  extends: .devsecops_template
+  script:
+    - |
+      set -euo pipefail
+
+      echo "Iniciando análisis SCA con OSV-Scanner..."
+
+      if [ "${SCA_ENABLED:-false}" != "true" ]; then
+        echo "Análisis SCA deshabilitado en la configuración."
+        echo '{"vulnerabilities": []}' | tee gl-dependency-scanning-report.json
+        exit 0
+      fi
+
+      echo "Extrayendo configuración de SCA..."
+      SCA_SEVERITY_THRESHOLD=$(yq e '.sca.severity_threshold // "medium"' /tmp/devsecops-config.yml)
+      SCA_FAIL_ON_DETECTION=$(yq e '.sca.fail_on_detection // false' /tmp/devsecops-config.yml)
+      SCA_ECOSYSTEMS=$(yq e '.sca.ecosystems // "auto"' /tmp/devsecops-config.yml)
+      SCA_RECURSIVE=$(yq e '.sca.recursive // true' /tmp/devsecops-config.yml)
+
+      echo "Configuración de SCA:"
+      echo "  Umbral de Severidad: $SCA_SEVERITY_THRESHOLD"
+      echo "  Fallar por Detección: $SCA_FAIL_ON_DETECTION"
+      echo "  Ecosistemas: $SCA_ECOSYSTEMS"
+      echo "  Escaneo Recursivo: $SCA_RECURSIVE"
+
+      mkdir -p sca-output
+
+      OSV_CMD="osv-scanner --format json --output sca-output/osv-report.json"
+      
+      if [ "$SCA_RECURSIVE" = "true" ]; then
+        OSV_CMD+=" -r"
+      fi
+
+      if [ "$SCA_ECOSYSTEMS" = "auto" ]; then
+        echo "Detectando ecosistemas del proyecto automáticamente..."
+        OSV_CMD+=" ."
+      else
+        echo "Usando ecosistemas especificados: $SCA_ECOSYSTEMS"
+        OSV_CMD+=" $SCA_ECOSYSTEMS"
+      fi
+
+      COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "sca")
+      if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
+        echo "Excluyendo rutas: $COMBINED_EXCLUDE_PATHS"
+        OSV_CMD+=" -e $COMBINED_EXCLUDE_PATHS"
+      fi
+
+      echo "Ejecutando OSV-Scanner con el comando: $OSV_CMD"
+      if ! eval "$OSV_CMD"; then
+        echo "ADVERTENCIA: Fallo al ejecutar OSV-Scanner. Se genera un informe vacío."
+        echo '{"vulnerabilities": []}' > gl-dependency-scanning-report.json
+      else
+        echo "OSV-Scanner completado exitosamente."
+        
+        if ! jq '{ "version": "15.0.0", "schema": "https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/raw/v15.0.0/dist/dependency-scanning-report-format.json", "scan": { "start_time": (now | strftime("%Y-%m-%dT%H:%M:%S")), "end_time": (now | strftime("%Y-%m-%dT%H:%M:%S")), "status": "success", "type": "dependency_scanning", "scanner": { "id": "osv-scanner", "name": "OSV Scanner", "version": "2.1.0", "vendor": { "name": "Google" } } }, "vulnerabilities": [ .results[]?.packages[]?.vulnerabilities[]? | { "id": .id, "name": .summary // .id, "description": .details // .summary // "No description available", "severity": ( if .database_specific.severity == "CRITICAL" then "Critical" elif .database_specific.severity == "HIGH" then "High" elif .database_specific.severity == "MODERATE" or .database_specific.severity == "MEDIUM" then "Medium" elif .database_specific.severity == "LOW" then "Low" elif .severity[]?.score >= 9.0 then "Critical" elif .severity[]?.score >= 7.0 then "High" elif .severity[]?.score >= 4.0 then "Medium" else "Low" end ), "confidence": "High", "scanner": { "id": "osv-scanner", "name": "OSV Scanner" }, "location": { "file": .package.name // "unknown", "dependency": { "package": { "name": .package.name // .affected[0].package.name }, "version": .package.version // .affected[0].versions[0] } }, "identifiers": [ { "type": "osv", "name": .id, "value": .id, "url": ("https://osv.dev/vulnerability/" + .id) } ] + ( .aliases[]? // [] | map({ "type": (if startswith("CVE-") then "cve" elif startswith("GHSA-") then "ghsa" else "other" end), "name": ., "value": ., "url": (if startswith("CVE-") then "https://nvd.nist.gov/vuln/detail/" + . elif startswith("GHSA-") then "https://github.com/advisories/" + . else null end) }) ), "links": [ { "url": ("https://osv.dev/vulnerability/" + .id), "name": "OSV" } ] + (.references[]? | map({ "url": ., "name": "Reference" })) } ] }' sca-output/osv-report.json > gl-dependency-scanning-report.json; then
+          echo "ADVERTENCIA: Error al convertir el informe. Creando informe mínimo."
+          echo '{"vulnerabilities": []}' > gl-dependency-scanning-report.json
+        fi
+
+        echo "Generando informe HTML..."
+        REPORT_JSON=$(jq -c '.' gl-dependency-scanning-report.json)
+        
+        # Uso de <<-EOF para que la indentación dentro del heredoc sea ignorada
+        cat > sca-output/osv-report.html <<- EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>OSV Scanner Security Report</title>
+              <style>
+                  body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; background-color: #f4f4f4; color: #333; }
+                  .container { max-width: 1200px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                  h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
+                  .summary { background-color: #e9ecef; padding: 20px; border-radius: 5px; margin-bottom: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+                  .summary-item { text-align: center; }
+                  .summary-item h2 { margin: 0; color: #555; font-size: 1.2em; }
+                  .summary-item .count { font-size: 2.5em; font-weight: bold; margin: 10px 0; }
+                  .critical { color: #721c24; }
+                  .high { color: #e74c3c; }
+                  .medium { color: #f39c12; }
+                  .low { color: #3498db; }
+                  .vulnerability { background-color: #fff; border: 1px solid #ddd; margin-bottom: 20px; padding: 20px; border-radius: 5px; }
+                  .vulnerability.critical { border-left: 5px solid #721c24; }
+                  .vulnerability.high { border-left: 5px solid #e74c3c; }
+                  .vulnerability.medium { border-left: 5px solid #f39c12; }
+                  .vulnerability.low { border-left: 5px solid #3498db; }
+                  .vuln-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+                  .vuln-id { font-weight: bold; font-size: 1.1em; }
+                  .severity-badge { padding: 5px 10px; border-radius: 3px; color: white; font-size: 0.9em; font-weight: bold; }
+                  .severity-badge.critical { background-color: #721c24; }
+                  .severity-badge.high { background-color: #e74c3c; }
+                  .severity-badge.medium { background-color: #f39c12; }
+                  .severity-badge.low { background-color: #3498db; }
+                  .package-info { margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-radius: 3px; }
+                  .links { margin-top: 10px; }
+                  .links a { margin-right: 10px; color: #3498db; text-decoration: none; }
+                  .links a:hover { text-decoration: underline; }
+                  @media (prefers-color-scheme: dark) {
+                      body { background-color: #2c2c2c; color: #e0e0e0; }
+                      .container { background: #3c3c3c; box-shadow: 0 0 10px rgba(0,0,0,0.3); }
+                      .summary { background-color: #4a4a4a; }
+                      .vulnerability { background-color: #4c4c4c; border-color: #5a5a5a; }
+                      .package-info { background-color: #5a5a5a; }
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>OSV Scanner Security Report</h1>
+                  <div class="summary" id="summary"></div>
+                  <div id="vulnerabilities"></div>
+              </div>
+              <script>
+                  const reportData = JSON.parse('$REPORT_JSON');
+                  
+                  const summary = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+                  reportData.vulnerabilities.forEach(vuln => {
+                      summary.total++;
+                      summary[vuln.severity.toLowerCase()]++;
+                  });
+                  
+                  const summaryHtml = \`
+                      <div class="summary-item"><h2>Total Vulnerabilidades</h2><div class="count">\${summary.total}</div></div>
+                      <div class="summary-item"><h2>Críticas</h2><div class="count critical">\${summary.critical}</div></div>
+                      <div class="summary-item"><h2>Altas</h2><div class="count high">\${summary.high}</div></div>
+                      <div class="summary-item"><h2>Medias</h2><div class="count medium">\${summary.medium}</div></div>
+                      <div class="summary-item"><h2>Bajas</h2><div class="count low">\${summary.low}</div></div>
+                  \`;
+                  document.getElementById('summary').innerHTML = summaryHtml;
+                  
+                  const vulnsHtml = reportData.vulnerabilities.map(vuln => \`
+                      <div class="vulnerability \${vuln.severity.toLowerCase()}">
+                          <div class="vuln-header">
+                              <span class="vuln-id">\${vuln.id}</span>
+                              <span class="severity-badge \${vuln.severity.toLowerCase()}">\${vuln.severity}</span>
+                          </div>
+                          <p>\${vuln.description}</p>
+                          <div class="package-info">
+                              <strong>Paquete:</strong> \${vuln.location.dependency.package.name}
+                              <strong>Versión:</strong> \${vuln.location.dependency.version || 'Desconocida'}
+                          </div>
+                          <div class="links">
+                              \${vuln.links.map(link => \`<a href="\${link.url}" target="_blank">\${link.name}</a>\`).join('')}
+                          </div>
+                      </div>
+                  \`).join('');
+                  
+                  document.getElementById('vulnerabilities').innerHTML = vulnsHtml || '<p>¡No se encontraron vulnerabilidades!</p>';
+              </script>
+          </body>
+          </html>
+        EOF
+
+        TOTAL_VULNS=$(jq '.vulnerabilities | length' gl-dependency-scanning-report.json 2>/dev/null || echo "0")
+        
+        echo ""
+        echo "--- Resumen de SCA ---"
+        echo "Total de vulnerabilidades: $TOTAL_VULNS"
+        echo "-----------------------"
+        echo ""
+
+        if [ "$TOTAL_VULNS" -gt 0 ]; then
+          echo "ADVERTENCIA: Se encontraron $TOTAL_VULNS vulnerabilidades en las dependencias."
+
+          THRESHOLD_PASSED_VULNS=$(jq -r --arg SEV_THRESHOLD "$SCA_SEVERITY_THRESHOLD" '
+            def severity_level:
+              if . == "Critical" then 4
+              elif . == "High" then 3
+              elif . == "Medium" then 2
+              elif . == "Low" then 1
+              else 0
+              end;
+            
+            def threshold_level($threshold):
+              if $threshold == "critical" then 4
+              elif $threshold == "high" then 3
+              elif $threshold == "medium" then 2
+              elif $threshold == "low" then 1
+              else 0
+              end;
+            
+            [.vulnerabilities[] | select(severity_level(.severity) >= threshold_level($SEV_THRESHOLD))] | length
+            ' gl-dependency-scanning-report.json)
+
+          echo "Se encontraron $THRESHOLD_PASSED_VULNS vulnerabilidades con una severidad de $SCA_SEVERITY_THRESHOLD o superior."
+          
+          if [ "$SCA_FAIL_ON_DETECTION" = "true" ] && [ "$THRESHOLD_PASSED_VULNS" -gt 0 ]; then
+            echo "El pipeline está configurado para fallar con esta severidad. Terminando..."
+            exit 1
+          fi
+        else
+          echo "Éxito: No se detectaron vulnerabilidades en las dependencias."
+        fi
+      fi
+  
+  artifacts:
+    expire_in: 1 week
+    when: always
+    paths:
+      - sca-output/
+    reports:
+      dependency_scanning: gl-dependency-scanning-report.json
   rules:
     - if: $CI_PIPELINE_SOURCE
       when: on_success
