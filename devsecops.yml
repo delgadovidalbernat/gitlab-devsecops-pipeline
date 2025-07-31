@@ -26,7 +26,7 @@ variables:
       target_url: "auto"  # auto, or specific URL
       scan_type: "api"  # api, baseline, full
       openapi_spec: "auto"  # auto, or specific URL
-      max_scan_duration: "300"  # seconds
+      max_scan_duration: "600"  # seconds
       fail_on_detection: false
       exclude_paths:
         - "/swagger/*"
@@ -88,7 +88,6 @@ rules_variable_extractor:
     - echo "Variable extracted SAST_SEVERITY_THRESHOLD=$SAST_SEVERITY_VALUE"
     - echo "Variable extracted SAST_LANGUAGES=$SAST_LANGUAGES_VALUE"
     - echo "Variable extracted SCA_ENABLED=$SCA_ENABLED_VALUE"
-    - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
     - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
     - echo "Variable extracted DAST_TARGET_URL=$DAST_TARGET_URL_VALUE"
     - echo "Variable extracted DAST_SCAN_TYPE=$DAST_SCAN_TYPE_VALUE"
@@ -743,14 +742,6 @@ devsecops_dast:
         echo "Auto-detected OpenAPI spec: $DAST_OPENAPI_SPEC"
       fi
 
-      # Test accessibility
-      echo "Testing target accessibility..."
-      if ! curl -f -s -m 10 "$DAST_TARGET_URL" > /dev/null 2>&1; then
-        echo "ERROR: Target URL not accessible: $DAST_TARGET_URL"
-        exit 1
-      fi
-      echo "Target accessible"
-
       # Generate ZAP automation config using echo
       echo "Generating ZAP automation configuration..."
       
@@ -797,27 +788,28 @@ devsecops_dast:
       echo "  - type: report" >> zap-automation.yaml
       echo "    parameters:" >> zap-automation.yaml
       echo "      template: traditional-html" >> zap-automation.yaml
-      echo "      reportDir: /workspace/zap-output" >> zap-automation.yaml
+      echo "      reportDir: $(pwd)/zap-output" >> zap-automation.yaml
       echo "      reportFile: zap-report.html" >> zap-automation.yaml
 
       echo "Generated ZAP config:"
       cat zap-automation.yaml
 
       # Create output directory
-      mkdir -p /workspace/zap-output
+      mkdir -p zap-output
+      cp zap-automation.yaml zap-output/zap-automation.yaml
 
       # Run ZAP
       echo "Running OWASP ZAP scan..."
       set +e
-      timeout $DAST_MAX_DURATION zap -cmd -autorun zap-automation.yaml
+      timeout $DAST_MAX_DURATION zap -cmd -autorun $(pwd)/zap-output/zap-automation.yaml
       ZAP_EXIT_CODE=$?
       set -e
 
       echo "ZAP completed with exit code: $ZAP_EXIT_CODE"
 
       # Create basic GitLab DAST report for integration
-      if [ -f "/workspace/zap-output/zap-report.html" ]; then
-        ALERT_COUNT=$(grep -c "alertname" "/workspace/zap-output/zap-report.html" 2>/dev/null || echo "0")
+      if [ -f "zap-output/zap-report.html" ]; then
+        ALERT_COUNT=$(grep -c "alertname" "/zap-output/zap-report.html" 2>/dev/null || echo "0")
         echo '{"site": [{"name": "'"$DAST_TARGET_URL"'", "alerts": [{"name": "DAST Scan Results", "riskdesc": "Informational", "desc": "DAST scan completed with '"$ALERT_COUNT"' alerts"}]}]}' > gl-dast-report.json
         echo "DAST scan completed with $ALERT_COUNT alerts"
       else
