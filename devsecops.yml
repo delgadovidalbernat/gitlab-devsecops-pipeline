@@ -21,7 +21,7 @@ variables:
       fail_on_detection: false
     sca:
       enabled: true
-      severity_threshold: "medium" # low, medium, high, critical
+      severity_threshold: "low" # low, medium, high, critical
       fail_on_detection: false
       ecosystems: "auto" # auto, o rutas específicas
       recursive: true
@@ -1061,7 +1061,7 @@ devsecops_sca:
                 // It's safer to parse the data inside a try-catch block.
                 let reportData;
                 try {
-                    reportData = JSON.parse('$REPORT_JSON');
+                    reportData = JSON.parse(document.getElementById('report-data').textContent);
                 } catch (e) {
                     console.error("Failed to parse report data:", e);
                     reportData = { vulnerabilities: [] }; // Fallback to empty data
@@ -1078,13 +1078,13 @@ devsecops_sca:
                     }
                 });
                 
-                const summaryHtml = \`
+                const summaryHtml = `
                     <div class="summary-item"><h2>Total Vulnerabilities</h2><div class="count">\${summary.total}</div></div>
                     <div class="summary-item"><h2>Critical</h2><div class="count critical">\${summary.critical}</div></div>
                     <div class="summary-item"><h2>High</h2><div class="count high">\${summary.high}</div></div>
                     <div class="summary-item"><h2>Medium</h2><div class="count medium">\${summary.medium}</div></div>
                     <div class="summary-item"><h2>Low</h2><div class="count low">\${summary.low}</div></div>
-                \`;
+                `;
                 document.getElementById('summary').innerHTML = summaryHtml;
                 
                 const vulnsHtml = (reportData.vulnerabilities || []).map(vuln => {
@@ -1092,7 +1092,7 @@ devsecops_sca:
                     const linksHtml = (vuln.links || []).map(link => \`<a href="\${link.url}" target="_blank" rel="noopener noreferrer">\${link.name || 'Link'}</a>\`).join('');
                     const identifiersHtml = (vuln.identifiers || []).map(id => \`<a href="\${id.url}" target="_blank" rel="noopener noreferrer">\${id.name}</a>\`).join(', ');
 
-                    return \`
+                    return `
                         <div class="vulnerability \${severity}">
                             <div class="vuln-header">
                                 <span class="vuln-id">\${vuln.name || vuln.id}</span>
@@ -1111,7 +1111,7 @@ devsecops_sca:
                                 <strong>Identifiers:</strong> \${identifiersHtml}
                             </div>
                         </div>
-                    \`;
+                    `;
                 }).join('');
                 
                 document.getElementById('vulnerabilities').innerHTML = vulnsHtml || '<p style="text-align: center; padding: 20px;">No vulnerabilities found!</p>';
