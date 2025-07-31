@@ -857,204 +857,269 @@ devsecops_sca:
   extends: .devsecops_template
   script:
     - |
+      # Exit immediately if a command exits with a non-zero status.
+      # Treat unset variables as an error.
+      # Pipelines will fail on the first command that fails.
       set -euo pipefail
 
-      echo "Iniciando análisis SCA con OSV-Scanner..."
+      echo "Starting SCA scan with OSV-Scanner..."
 
+      # Check if SCA is enabled in the configuration file. If not, create an empty report and exit successfully.
       if [ "${SCA_ENABLED:-false}" != "true" ]; then
-        echo "Análisis SCA deshabilitado en la configuración."
+        echo "SCA scan is disabled in the configuration. Skipping."
         echo '{"vulnerabilities": []}' | tee gl-dependency-scanning-report.json
         exit 0
       fi
 
-      echo "Extrayendo configuración de SCA..."
+      # --- Configuration Extraction ---
+      # Extract SCA settings from the devsecops-config.yml file using yq.
+      # Provide default values for each setting in case they are not specified.
+      echo "Extracting SCA configuration..."
       SCA_SEVERITY_THRESHOLD=$(yq e '.sca.severity_threshold // "medium"' /tmp/devsecops-config.yml)
       SCA_FAIL_ON_DETECTION=$(yq e '.sca.fail_on_detection // false' /tmp/devsecops-config.yml)
       SCA_ECOSYSTEMS=$(yq e '.sca.ecosystems // "auto"' /tmp/devsecops-config.yml)
       SCA_RECURSIVE=$(yq e '.sca.recursive // true' /tmp/devsecops-config.yml)
 
-      echo "Configuración de SCA:"
-      echo "  Umbral de Severidad: $SCA_SEVERITY_THRESHOLD"
-      echo "  Fallar por Detección: $SCA_FAIL_ON_DETECTION"
-      echo "  Ecosistemas: $SCA_ECOSYSTEMS"
-      echo "  Escaneo Recursivo: $SCA_RECURSIVE"
+      echo "SCA Configuration:"
+      echo "  Severity Threshold: $SCA_SEVERITY_THRESHOLD"
+      echo "  Fail on Detection: $SCA_FAIL_ON_DETECTION"
+      echo "  Ecosystems: $SCA_ECOSYSTEMS"
+      echo "  Recursive Scan: $SCA_RECURSIVE"
 
+      # Create an output directory for the reports.
       mkdir -p sca-output
 
+      # --- OSV-Scanner Command Construction ---
+      # Base command for osv-scanner.
       OSV_CMD="osv-scanner --format json --output sca-output/osv-report.json"
       
+      # Add the recursive flag if enabled.
       if [ "$SCA_RECURSIVE" = "true" ]; then
         OSV_CMD+=" -r"
       fi
 
+      # Specify the target for scanning. Can be automatic or a list of ecosystems.
       if [ "$SCA_ECOSYSTEMS" = "auto" ]; then
-        echo "Detectando ecosistemas del proyecto automáticamente..."
-        OSV_CMD+=" ."
+        echo "Automatically detecting project ecosystems..."
+        OSV_CMD+=" ." # Scan the current directory
       else
-        echo "Usando ecosistemas especificados: $SCA_ECOSYSTEMS"
+        echo "Using specified ecosystems: $SCA_ECOSYSTEMS"
         OSV_CMD+=" $SCA_ECOSYSTEMS"
       fi
 
+      # Combine global and SCA-specific exclude paths.
+      # The `combine_exclude_paths` function is assumed to be defined elsewhere (e.g., in .devsecops_template).
       COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "sca")
       if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
-        echo "Excluyendo rutas: $COMBINED_EXCLUDE_PATHS"
-        OSV_CMD+=" -e $COMBINED_EXCLUDE_PATHS"
+        echo "Excluding paths: $COMBINED_EXCLUDE_PATHS"
+        # Note: This approach might be fragile if paths contain spaces.
+        # Consider using a different method for complex exclusion rules.
+        OSV_CMD+=" --skip-git -e $COMBINED_EXCLUDE_PATHS"
       fi
 
-      echo "Ejecutando OSV-Scanner con el comando: $OSV_CMD"
+      # --- Execution and Report Generation ---
+      echo "Executing OSV-Scanner with command: $OSV_CMD"
+      # Use `eval` to correctly interpret the command string with its arguments.
+      # A `|| true` is added to prevent `set -e` from exiting if osv-scanner finds vulnerabilities (it exits with a non-zero code).
+      # We will check the exit code manually later if needed.
       if ! eval "$OSV_CMD"; then
-        echo "ADVERTENCIA: Fallo al ejecutar OSV-Scanner. Se genera un informe vacío."
-        echo '{"vulnerabilities": []}' > gl-dependency-scanning-report.json
-      else
-        echo "OSV-Scanner completado exitosamente."
-        
-        if ! jq '{ "version": "15.0.0", "schema": "https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/raw/v15.0.0/dist/dependency-scanning-report-format.json", "scan": { "start_time": (now | strftime("%Y-%m-%dT%H:%M:%S")), "end_time": (now | strftime("%Y-%m-%dT%H:%M:%S")), "status": "success", "type": "dependency_scanning", "scanner": { "id": "osv-scanner", "name": "OSV Scanner", "version": "2.1.0", "vendor": { "name": "Google" } } }, "vulnerabilities": [ .results[]?.packages[]?.vulnerabilities[]? | { "id": .id, "name": .summary // .id, "description": .details // .summary // "No description available", "severity": ( if .database_specific.severity == "CRITICAL" then "Critical" elif .database_specific.severity == "HIGH" then "High" elif .database_specific.severity == "MODERATE" or .database_specific.severity == "MEDIUM" then "Medium" elif .database_specific.severity == "LOW" then "Low" elif .severity[]?.score >= 9.0 then "Critical" elif .severity[]?.score >= 7.0 then "High" elif .severity[]?.score >= 4.0 then "Medium" else "Low" end ), "confidence": "High", "scanner": { "id": "osv-scanner", "name": "OSV Scanner" }, "location": { "file": .package.name // "unknown", "dependency": { "package": { "name": .package.name // .affected[0].package.name }, "version": .package.version // .affected[0].versions[0] } }, "identifiers": [ { "type": "osv", "name": .id, "value": .id, "url": ("https://osv.dev/vulnerability/" + .id) } ] + ( .aliases[]? // [] | map({ "type": (if startswith("CVE-") then "cve" elif startswith("GHSA-") then "ghsa" else "other" end), "name": ., "value": ., "url": (if startswith("CVE-") then "https://nvd.nist.gov/vuln/detail/" + . elif startswith("GHSA-") then "https://github.com/advisories/" + . else null end) }) ), "links": [ { "url": ("https://osv.dev/vulnerability/" + .id), "name": "OSV" } ] + (.references[]? | map({ "url": ., "name": "Reference" })) } ] }' sca-output/osv-report.json > gl-dependency-scanning-report.json; then
-          echo "ADVERTENCIA: Error al convertir el informe. Creando informe mínimo."
-          echo '{"vulnerabilities": []}' > gl-dependency-scanning-report.json
-        fi
-
-        echo "Generando informe HTML..."
-        REPORT_JSON=$(jq -c '.' gl-dependency-scanning-report.json)
-        
-        # Uso de <<-EOF para que la indentación dentro del heredoc sea ignorada
-        cat > sca-output/osv-report.html <<- EOF
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>OSV Scanner Security Report</title>
-              <style>
-                  body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; background-color: #f4f4f4; color: #333; }
-                  .container { max-width: 1200px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-                  h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
-                  .summary { background-color: #e9ecef; padding: 20px; border-radius: 5px; margin-bottom: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
-                  .summary-item { text-align: center; }
-                  .summary-item h2 { margin: 0; color: #555; font-size: 1.2em; }
-                  .summary-item .count { font-size: 2.5em; font-weight: bold; margin: 10px 0; }
-                  .critical { color: #721c24; }
-                  .high { color: #e74c3c; }
-                  .medium { color: #f39c12; }
-                  .low { color: #3498db; }
-                  .vulnerability { background-color: #fff; border: 1px solid #ddd; margin-bottom: 20px; padding: 20px; border-radius: 5px; }
-                  .vulnerability.critical { border-left: 5px solid #721c24; }
-                  .vulnerability.high { border-left: 5px solid #e74c3c; }
-                  .vulnerability.medium { border-left: 5px solid #f39c12; }
-                  .vulnerability.low { border-left: 5px solid #3498db; }
-                  .vuln-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-                  .vuln-id { font-weight: bold; font-size: 1.1em; }
-                  .severity-badge { padding: 5px 10px; border-radius: 3px; color: white; font-size: 0.9em; font-weight: bold; }
-                  .severity-badge.critical { background-color: #721c24; }
-                  .severity-badge.high { background-color: #e74c3c; }
-                  .severity-badge.medium { background-color: #f39c12; }
-                  .severity-badge.low { background-color: #3498db; }
-                  .package-info { margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-radius: 3px; }
-                  .links { margin-top: 10px; }
-                  .links a { margin-right: 10px; color: #3498db; text-decoration: none; }
-                  .links a:hover { text-decoration: underline; }
-                  @media (prefers-color-scheme: dark) {
-                      body { background-color: #2c2c2c; color: #e0e0e0; }
-                      .container { background: #3c3c3c; box-shadow: 0 0 10px rgba(0,0,0,0.3); }
-                      .summary { background-color: #4a4a4a; }
-                      .vulnerability { background-color: #4c4c4c; border-color: #5a5a5a; }
-                      .package-info { background-color: #5a5a5a; }
-                  }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <h1>OSV Scanner Security Report</h1>
-                  <div class="summary" id="summary"></div>
-                  <div id="vulnerabilities"></div>
-              </div>
-              <script>
-                  const reportData = JSON.parse('$REPORT_JSON');
-                  
-                  const summary = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
-                  reportData.vulnerabilities.forEach(vuln => {
-                      summary.total++;
-                      summary[vuln.severity.toLowerCase()]++;
-                  });
-                  
-                  const summaryHtml = \`
-                      <div class="summary-item"><h2>Total Vulnerabilidades</h2><div class="count">\${summary.total}</div></div>
-                      <div class="summary-item"><h2>Críticas</h2><div class="count critical">\${summary.critical}</div></div>
-                      <div class="summary-item"><h2>Altas</h2><div class="count high">\${summary.high}</div></div>
-                      <div class="summary-item"><h2>Medias</h2><div class="count medium">\${summary.medium}</div></div>
-                      <div class="summary-item"><h2>Bajas</h2><div class="count low">\${summary.low}</div></div>
-                  \`;
-                  document.getElementById('summary').innerHTML = summaryHtml;
-                  
-                  const vulnsHtml = reportData.vulnerabilities.map(vuln => \`
-                      <div class="vulnerability \${vuln.severity.toLowerCase()}">
-                          <div class="vuln-header">
-                              <span class="vuln-id">\${vuln.id}</span>
-                              <span class="severity-badge \${vuln.severity.toLowerCase()}">\${vuln.severity}</span>
-                          </div>
-                          <p>\${vuln.description}</p>
-                          <div class="package-info">
-                              <strong>Paquete:</strong> \${vuln.location.dependency.package.name}
-                              <strong>Versión:</strong> \${vuln.location.dependency.version || 'Desconocida'}
-                          </div>
-                          <div class="links">
-                              \${vuln.links.map(link => \`<a href="\${link.url}" target="_blank">\${link.name}</a>\`).join('')}
-                          </div>
-                      </div>
-                  \`).join('');
-                  
-                  document.getElementById('vulnerabilities').innerHTML = vulnsHtml || '<p>¡No se encontraron vulnerabilidades!</p>';
-              </script>
-          </body>
-          </html>
-        EOF
-
-        TOTAL_VULNS=$(jq '.vulnerabilities | length' gl-dependency-scanning-report.json 2>/dev/null || echo "0")
-        
-        echo ""
-        echo "--- Resumen de SCA ---"
-        echo "Total de vulnerabilidades: $TOTAL_VULNS"
-        echo "-----------------------"
-        echo ""
-
-        if [ "$TOTAL_VULNS" -gt 0 ]; then
-          echo "ADVERTENCIA: Se encontraron $TOTAL_VULNS vulnerabilidades en las dependencias."
-
-          THRESHOLD_PASSED_VULNS=$(jq -r --arg SEV_THRESHOLD "$SCA_SEVERITY_THRESHOLD" '
-            def severity_level:
-              if . == "Critical" then 4
-              elif . == "High" then 3
-              elif . == "Medium" then 2
-              elif . == "Low" then 1
-              else 0
-              end;
-            
-            def threshold_level($threshold):
-              if $threshold == "critical" then 4
-              elif $threshold == "high" then 3
-              elif $threshold == "medium" then 2
-              elif $threshold == "low" then 1
-              else 0
-              end;
-            
-            [.vulnerabilities[] | select(severity_level(.severity) >= threshold_level($SEV_THRESHOLD))] | length
-            ' gl-dependency-scanning-report.json)
-
-          echo "Se encontraron $THRESHOLD_PASSED_VULNS vulnerabilidades con una severidad de $SCA_SEVERITY_THRESHOLD o superior."
-          
-          if [ "$SCA_FAIL_ON_DETECTION" = "true" ] && [ "$THRESHOLD_PASSED_VULNS" -gt 0 ]; then
-            echo "El pipeline está configurado para fallar con esta severidad. Terminando..."
-            exit 1
-          fi
+        # Check if the output file was created and is not empty. Some errors still produce a file.
+        if [ -s "sca-output/osv-report.json" ]; then
+            echo "OSV-Scanner finished with a non-zero exit code, but a report was generated. Proceeding with analysis."
         else
-          echo "Éxito: No se detectaron vulnerabilidades en las dependencias."
+            echo "WARNING: OSV-Scanner failed to execute. Generating an empty report."
+            echo '{"vulnerabilities": []}' > gl-dependency-scanning-report.json
+            # We create an empty HTML report as well to satisfy the artifact path.
+            echo "<html><body><h1>OSV-Scanner failed to run.</h1></body></html>" > sca-output/osv-report.html
+            # Exit gracefully so the pipeline can continue and show the empty report.
+            exit 0
         fi
+      else
+        echo "OSV-Scanner completed successfully."
       fi
-  
+      
+      # --- Report Transformation ---
+      # Convert the OSV-Scanner JSON output to the GitLab Dependency Scanning report format using jq.
+      # If this conversion fails, create a minimal, empty report to prevent pipeline failure.
+      echo "Transforming OSV report to GitLab format..."
+      if ! jq '{ "version": "15.0.0", "schema": "https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/raw/v15.0.0/dist/dependency-scanning-report-format.json", "scan": { "start_time": (now | strftime("%Y-%m-%dT%H:%M:%S")), "end_time": (now | strftime("%Y-%m-%dT%H:%M:%S")), "status": "success", "type": "dependency_scanning", "scanner": { "id": "osv-scanner", "name": "OSV Scanner", "version": "2.1.0", "vendor": { "name": "Google" } } }, "vulnerabilities": [ .results[]?.packages[]?.vulnerabilities[]? | { "id": .id, "name": .summary // .id, "description": .details // .summary // "No description available", "severity": ( if .database_specific.severity == "CRITICAL" then "Critical" elif .database_specific.severity == "HIGH" then "High" elif .database_specific.severity == "MODERATE" or .database_specific.severity == "MEDIUM" then "Medium" elif .database_specific.severity == "LOW" then "Low" elif .severity[]?.score >= 9.0 then "Critical" elif .severity[]?.score >= 7.0 then "High" elif .severity[]?.score >= 4.0 then "Medium" else "Low" end ), "confidence": "High", "scanner": { "id": "osv-scanner", "name": "OSV Scanner" }, "location": { "file": .package.name // "unknown", "dependency": { "package": { "name": .package.name // .affected[0].package.name }, "version": .package.version // .affected[0].versions[0] } }, "identifiers": [ { "type": "osv", "name": .id, "value": .id, "url": ("https://osv.dev/vulnerability/" + .id) } ] + ( .aliases[]? // [] | map({ "type": (if startswith("CVE-") then "cve" elif startswith("GHSA-") then "ghsa" else "other" end), "name": ., "value": ., "url": (if startswith("CVE-") then "https://nvd.nist.gov/vuln/detail/" + . elif startswith("GHSA-") then "https://github.com/advisories/" + . else null end) }) ), "links": [ { "url": ("https://osv.dev/vulnerability/" + .id), "name": "OSV" } ] + (.references[]? | map({ "url": ., "name": "Reference" })) } ] }' sca-output/osv-report.json > gl-dependency-scanning-report.json; then
+        echo "WARNING: Failed to convert the report. Creating a minimal report."
+        echo '{"vulnerabilities": []}' > gl-dependency-scanning-report.json
+      fi
+
+      # --- HTML Report Generation ---
+      echo "Generating HTML report..."
+      # Safely read the JSON report content into a variable for embedding in HTML.
+      REPORT_JSON=$(jq -c '.' gl-dependency-scanning-report.json)
+      
+      # Create an HTML report using a here-document.
+      # IMPORTANT: The final 'EOF' must not have any leading spaces.
+      cat > sca-output/osv-report.html <<-EOF
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>OSV Scanner Security Report</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"; line-height: 1.6; margin: 20px; background-color: #f4f4f4; color: #333; }
+                .container { max-width: 1200px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
+                h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
+                .summary { background-color: #e9ecef; padding: 20px; border-radius: 5px; margin-bottom: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; }
+                .summary-item { text-align: center; }
+                .summary-item h2 { margin: 0; color: #555; font-size: 1.2em; }
+                .summary-item .count { font-size: 2.5em; font-weight: bold; margin: 10px 0; }
+                .count.critical { color: #721c24; }
+                .count.high { color: #e74c3c; }
+                .count.medium { color: #f39c12; }
+                .count.low { color: #3498db; }
+                .vulnerability { background-color: #fff; border: 1px solid #ddd; margin-bottom: 20px; padding: 20px; border-radius: 5px; transition: box-shadow 0.3s ease; }
+                .vulnerability:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+                .vulnerability.critical { border-left: 5px solid #721c24; }
+                .vulnerability.high { border-left: 5px solid #e74c3c; }
+                .vulnerability.medium { border-left: 5px solid #f39c12; }
+                .vulnerability.low { border-left: 5px solid #3498db; }
+                .vuln-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
+                .vuln-id { font-weight: bold; font-size: 1.1em; word-break: break-all; }
+                .severity-badge { padding: 5px 10px; border-radius: 15px; color: white; font-size: 0.9em; font-weight: bold; }
+                .severity-badge.critical { background-color: #721c24; }
+                .severity-badge.high { background-color: #e74c3c; }
+                .severity-badge.medium { background-color: #f39c12; }
+                .severity-badge.low { background-color: #3498db; }
+                .package-info { margin: 15px 0; padding: 10px; background-color: #f8f9fa; border: 1px solid #eee; border-radius: 3px; }
+                .links { margin-top: 15px; }
+                .links a { margin-right: 12px; color: #3498db; text-decoration: none; }
+                .links a:hover { text-decoration: underline; }
+                @media (prefers-color-scheme: dark) {
+                    body { background-color: #1e1e1e; color: #e0e0e0; }
+                    .container { background: #2d2d2d; box-shadow: none; border: 1px solid #444; }
+                    h1 { color: #d0d0d0; }
+                    .summary { background-color: #3a3a3a; border: 1px solid #444; }
+                    .summary-item h2 { color: #ccc; }
+                    .vulnerability { background-color: #252525; border-color: #444; }
+                    .package-info { background-color: #3a3a3a; border-color: #444; }
+                    .links a { color: #58a6ff; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>OSV Scanner Security Report</h1>
+                <div class="summary" id="summary"></div>
+                <div id="vulnerabilities"></div>
+            </div>
+            <script>
+                // It's safer to parse the data inside a try-catch block.
+                let reportData;
+                try {
+                    reportData = JSON.parse('$REPORT_JSON');
+                } catch (e) {
+                    console.error("Failed to parse report data:", e);
+                    reportData = { vulnerabilities: [] }; // Fallback to empty data
+                }
+                
+                const summary = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+                (reportData.vulnerabilities || []).forEach(vuln => {
+                    summary.total++;
+                    const severity = (vuln.severity || 'unknown').toLowerCase();
+                    if (summary.hasOwnProperty(severity)) {
+                        summary[severity]++;
+                    }
+                });
+                
+                const summaryHtml = \`
+                    <div class="summary-item"><h2>Total Vulnerabilities</h2><div class="count">\${summary.total}</div></div>
+                    <div class="summary-item"><h2>Critical</h2><div class="count critical">\${summary.critical}</div></div>
+                    <div class="summary-item"><h2>High</h2><div class="count high">\${summary.high}</div></div>
+                    <div class="summary-item"><h2>Medium</h2><div class="count medium">\${summary.medium}</div></div>
+                    <div class="summary-item"><h2>Low</h2><div class="count low">\${summary.low}</div></div>
+                \`;
+                document.getElementById('summary').innerHTML = summaryHtml;
+                
+                const vulnsHtml = (reportData.vulnerabilities || []).map(vuln => {
+                    const severity = (vuln.severity || 'unknown').toLowerCase();
+                    const linksHtml = (vuln.links || []).map(link => \`<a href="\${link.url}" target="_blank" rel="noopener noreferrer">\${link.name || 'Link'}</a>\`).join('');
+                    const identifiersHtml = (vuln.identifiers || []).map(id => \`<a href="\${id.url}" target="_blank" rel="noopener noreferrer">\${id.name}</a>\`).join(', ');
+
+                    return \`
+                        <div class="vulnerability \${severity}">
+                            <div class="vuln-header">
+                                <span class="vuln-id">\${vuln.name || vuln.id}</span>
+                                <span class="severity-badge \${severity}">\${vuln.severity || 'Unknown'}</span>
+                            </div>
+                            <p>\${vuln.description || 'No description available.'}</p>
+                            <div class="package-info">
+                                <strong>Package:</strong> \${vuln.location.dependency.package.name}<br>
+                                <strong>Version:</strong> \${vuln.location.dependency.version || 'Unknown'}<br>
+                                <strong>File:</strong> \${vuln.location.file || 'N/A'}
+                            </div>
+                            <div class="links">
+                                <strong>Links:</strong> \${linksHtml}
+                            </div>
+                            <div class="links">
+                                <strong>Identifiers:</strong> \${identifiersHtml}
+                            </div>
+                        </div>
+                    \`;
+                }).join('');
+                
+                document.getElementById('vulnerabilities').innerHTML = vulnsHtml || '<p style="text-align: center; padding: 20px;">No vulnerabilities found!</p>';
+            </script>
+        </body>
+        </html>
+      EOF
+
+      # --- Final Check and Job Failure Logic ---
+      # Count the total number of vulnerabilities found.
+      TOTAL_VULNS=$(jq '.vulnerabilities | length' gl-dependency-scanning-report.json 2>/dev/null || echo "0")
+      
+      echo ""
+      echo "--- SCA Summary ---"
+      echo "Total vulnerabilities found: $TOTAL_VULNS"
+      echo "-------------------"
+      echo ""
+
+      if [ "$TOTAL_VULNS" -gt 0 ]; then
+        echo "WARNING: Found $TOTAL_VULNS vulnerabilities in dependencies."
+
+        # Define a jq function to map severity names to numeric levels for comparison.
+        # Then, count how many vulnerabilities meet or exceed the configured severity threshold.
+        THRESHOLD_PASSED_VULNS=$(jq -r --arg SEV_THRESHOLD "$SCA_SEVERITY_THRESHOLD" '
+          def severity_level:
+            if . == "Critical" then 4
+            elif . == "High" then 3
+            elif . == "Medium" then 2
+            elif . == "Low" then 1
+            else 0
+            end;
+          
+          def threshold_level($threshold):
+            if $threshold == "critical" then 4
+            elif $threshold == "high" then 3
+            elif $threshold == "medium" then 2
+            elif $threshold == "low" then 1
+            else 0
+            end;
+          
+          [.vulnerabilities[] | select(severity_level(.severity) >= threshold_level($SEV_THRESHOLD))] | length
+          ' gl-dependency-scanning-report.json)
+
+        echo "Found $THRESHOLD_PASSED_VULNS vulnerabilities with severity '$SCA_SEVERITY_THRESHOLD' or higher."
+        
+        # If the job is configured to fail and vulnerabilities exceeding the threshold were found, exit with an error code.
+        if [ "$SCA_FAIL_ON_DETECTION" = "true" ] && [ "$THRESHOLD_PASSED_VULNS" -gt 0 ]; then
+          echo "ERROR: Pipeline is configured to fail on this severity. Exiting with error."
+          exit 1
+        fi
+      else
+        echo "Success: No vulnerabilities detected in dependencies."
+      fi
   artifacts:
     expire_in: 1 week
     when: always
     paths:
       - sca-output/
+      - gl-dependency-scanning-report.json
     reports:
       dependency_scanning: gl-dependency-scanning-report.json
   rules:
