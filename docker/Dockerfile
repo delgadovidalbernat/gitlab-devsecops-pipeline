@@ -53,13 +53,11 @@ RUN curl -sL "https://raw.githubusercontent.com/zaproxy/zaproxy/main/docker/zap-
 RUN . /opt/venv/bin/activate && \
 	pip install --no-cache-dir python-owasp-zap-v2.4 requests
 
-# Install OWASP Dependency Check (for future SCA)
-ARG DEPENDENCY_CHECK_VERSION=9.0.8
-RUN apk add --no-cache openjdk17-jre-headless && \
-	curl -sL "https://github.com/jeremylong/DependencyCheck/releases/download/v${DEPENDENCY_CHECK_VERSION}/dependency-check-${DEPENDENCY_CHECK_VERSION}-release.zip" -o /tmp/dependency-check.zip && \
-	unzip -q /tmp/dependency-check.zip -d /opt/ && \
-	ln -s /opt/dependency-check/bin/dependency-check.sh /usr/local/bin/dependency-check && \
-	rm /tmp/dependency-check.zip
+# Install OSV-Scanner
+ARG OSV_SCANNER_VERSION=1.8.5
+RUN wget -q https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64 && \
+	chmod +x osv-scanner_linux_amd64 && \
+	mv osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
 
 RUN mkdir -p /usr/local/share/gitleaks/templates/
 COPY templates/gitleaks/html-report.tmpl /usr/local/share/gitleaks/templates/gitlab-html-report.tmpl
