@@ -1136,7 +1136,7 @@ devsecops_sca:
         # Define a jq function to map severity names to numeric levels for comparison.
         # Then, count how many vulnerabilities meet or exceed the configured severity threshold.
         THRESHOLD_PASSED_VULNS=$(jq -r --arg SEV_THRESHOLD "$SCA_SEVERITY_THRESHOLD" '
-          def severity_level:
+          def severity_level(s):
             if . == "Critical" then 4
             elif . == "High" then 3
             elif . == "Medium" then 2
@@ -1144,7 +1144,7 @@ devsecops_sca:
             else 0
             end;
           
-          def threshold_level($threshold):
+          def threshold_level(threshold):
             if $threshold == "critical" then 4
             elif $threshold == "high" then 3
             elif $threshold == "medium" then 2
