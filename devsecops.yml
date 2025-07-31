@@ -1144,7 +1144,7 @@ devsecops_sca:
             else 0
             end;
           
-          def threshold_level(threshold):
+          def threshold_level($threshold):
             if $threshold == "critical" then 4
             elif $threshold == "high" then 3
             elif $threshold == "medium" then 2
