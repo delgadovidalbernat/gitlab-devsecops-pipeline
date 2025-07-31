@@ -942,7 +942,56 @@ devsecops_sca:
       # Convert the OSV-Scanner JSON output to the GitLab Dependency Scanning report format using jq.
       # If this conversion fails, create a minimal, empty report to prevent pipeline failure.
       echo "Transforming OSV report to GitLab format..."
-      if ! jq '{ "version": "15.0.0", "schema": "https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/raw/v15.0.0/dist/dependency-scanning-report-format.json", "scan": { "start_time": (now | strftime("%Y-%m-%dT%H:%M:%S")), "end_time": (now | strftime("%Y-%m-%dT%H:%M:%S")), "status": "success", "type": "dependency_scanning", "scanner": { "id": "osv-scanner", "name": "OSV Scanner", "version": "2.1.0", "vendor": { "name": "Google" } } }, "vulnerabilities": [ .results[]?.packages[]?.vulnerabilities[]? | { "id": .id, "name": .summary // .id, "description": .details // .summary // "No description available", "severity": ( if .database_specific.severity == "CRITICAL" then "Critical" elif .database_specific.severity == "HIGH" then "High" elif .database_specific.severity == "MODERATE" or .database_specific.severity == "MEDIUM" then "Medium" elif .database_specific.severity == "LOW" then "Low" elif .severity[]?.score >= 9.0 then "Critical" elif .severity[]?.score >= 7.0 then "High" elif .severity[]?.score >= 4.0 then "Medium" else "Low" end ), "confidence": "High", "scanner": { "id": "osv-scanner", "name": "OSV Scanner" }, "location": { "file": .package.name // "unknown", "dependency": { "package": { "name": .package.name // .affected[0].package.name }, "version": .package.version // .affected[0].versions[0] } }, "identifiers": [ { "type": "osv", "name": .id, "value": .id, "url": ("https://osv.dev/vulnerability/" + .id) } ] + ( .aliases[]? // [] | map({ "type": (if startswith("CVE-") then "cve" elif startswith("GHSA-") then "ghsa" else "other" end), "name": ., "value": ., "url": (if startswith("CVE-") then "https://nvd.nist.gov/vuln/detail/" + . elif startswith("GHSA-") then "https://github.com/advisories/" + . else null end) }) ), "links": [ { "url": ("https://osv.dev/vulnerability/" + .id), "name": "OSV" } ] + (.references[]? | map({ "url": ., "name": "Reference" })) } ] }' sca-output/osv-report.json > gl-dependency-scanning-report.json; then
+      if ! jq '{
+          "version": "15.0.0",
+          "schema": "https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/raw/v15.0.0/dist/dependency-scanning-report-format.json",
+          "scan": {
+            "start_time": (now | strftime("%Y-%m-%dT%H:%M:%S")),
+            "end_time": (now | strftime("%Y-%m-%dT%H:%M:%S")),
+            "status": "success",
+            "type": "dependency_scanning",
+            "scanner": { "id": "osv-scanner", "name": "OSV Scanner", "version": "2.1.0", "vendor": { "name": "Google" } }
+          },
+          "vulnerabilities": [
+            .results[]?.packages[]?.vulnerabilities[]? | {
+              "id": .id,
+              "name": .summary // .id,
+              "description": .details // .summary // "No description available",
+              "severity": (
+                if .database_specific.severity == "CRITICAL" then "Critical"
+                elif .database_specific.severity == "HIGH" then "High"
+                elif .database_specific.severity == "MODERATE" or .database_specific.severity == "MEDIUM" then "Medium"
+                elif .database_specific.severity == "LOW" then "Low"
+                else "Unknown"
+                end
+              ),
+              "confidence": "High",
+              "scanner": { "id": "osv-scanner", "name": "OSV Scanner" },
+              "location": {
+                "file": .package.name // "unknown",
+                "dependency": {
+                  "package": { "name": .package.name // .affected[0].package.name },
+                  "version": .package.version // .affected[0].versions[0]
+                }
+              },
+              "identifiers": [
+                { "type": "osv", "name": .id, "value": .id, "url": ("https://osv.dev/vulnerability/" + .id) }
+              ] + (
+                .aliases // [] | map({
+                  "type": (if startswith("CVE-") then "cve" elif startswith("GHSA-") then "ghsa" else "other" end),
+                  "name": .,
+                  "value": .,
+                  "url": (if startswith("CVE-") then "https://nvd.nist.gov/vuln/detail/" + . elif startswith("GHSA-") then "https://github.com/advisories/" + . else null end)
+                })
+              ),
+              "links": [
+                { "url": ("https://osv.dev/vulnerability/" + .id), "name": "OSV" }
+              ] + (
+                .references // [] | map({ "url": .url, "name": .type // "Reference" })
+              )
+            }
+          ]
+        }' sca-output/osv-report.json > gl-dependency-scanning-report.json; then
         echo "WARNING: Failed to convert the report. Creating a minimal report."
         echo '{"vulnerabilities": []}' > gl-dependency-scanning-report.json
       fi
@@ -1018,12 +1067,14 @@ devsecops_sca:
                     reportData = { vulnerabilities: [] }; // Fallback to empty data
                 }
                 
-                const summary = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+                const summary = { total: 0, critical: 0, high: 0, medium: 0, low: 0, unknown: 0 };
                 (reportData.vulnerabilities || []).forEach(vuln => {
                     summary.total++;
                     const severity = (vuln.severity || 'unknown').toLowerCase();
                     if (summary.hasOwnProperty(severity)) {
                         summary[severity]++;
+                    } else {
+                        summary.unknown++;
                     }
                 });
                 
@@ -1126,3 +1177,4 @@ devsecops_sca:
     - if: $CI_PIPELINE_SOURCE
       when: on_success
       allow_failure: true
+
