@@ -1003,7 +1003,7 @@ devsecops_sca:
       
       # Create an HTML report using a here-document.
       # IMPORTANT: The final 'EOF' must not have any leading spaces.
-      cat > sca-output/osv-report.html <<-EOF
+      cat > sca-output/osv-report.html <<'EOF'
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -1056,12 +1056,15 @@ devsecops_sca:
                 <h1>OSV Scanner Security Report</h1>
                 <div class="summary" id="summary"></div>
                 <div id="vulnerabilities"></div>
+                <script id="report-data" type="application/json">
+                  ${REPORT_JSON}
+                </script>
             </div>
             <script>
                 // It's safer to parse the data inside a try-catch block.
                 let reportData;
                 try {
-                    reportData = JSON.parse('$REPORT_JSON');
+                    reportData = JSON.parse(document.getElementById('report-data').textContent);
                 } catch (e) {
                     console.error("Failed to parse report data:", e);
                     reportData = { vulnerabilities: [] }; // Fallback to empty data
