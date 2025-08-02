@@ -1002,7 +1002,7 @@ devsecops_sca:
       REPORT_JSON=$(jq -c '.' gl-dependency-scanning-report.json)
       
       # Create an HTML report using a here-document.
-      cat > sca-output/osv-report.html <<'EOF'
+      cat > sca-output/osv-report.html <<'HTML_HEADER'
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -1056,7 +1056,11 @@ devsecops_sca:
                 <div class="summary" id="summary"></div>
                 <div id="vulnerabilities"></div>
                 <script id="report-data" type="application/json">
-                  ${REPORT_JSON}
+      HTML_HEADER
+
+      echo "$REPORT_JSON" | jq -c '.' >> sca-output/osv-report.html
+
+      cat >> sca-output/osv-report.html << 'HTML_FOOTER'
                 </script>
             </div>
             <script>
@@ -1120,7 +1124,7 @@ devsecops_sca:
             </script>
         </body>
         </html>
-      EOF
+      HTML_FOOTER
 
       # --- Final Check and Job Failure Logic ---
       # Count the total number of vulnerabilities found.
