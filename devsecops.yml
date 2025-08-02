@@ -1002,8 +1002,7 @@ devsecops_sca:
       REPORT_JSON=$(jq -c '.' gl-dependency-scanning-report.json)
       
       # Create an HTML report using a here-document.
-      # IMPORTANT: The final 'EOF' must not have any leading spaces.
-      cat > sca-output/osv-report.html <<EOF
+      cat > sca-output/osv-report.html <<'EOF'
         <!DOCTYPE html>
         <html lang="en">
         <head>
