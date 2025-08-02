@@ -1084,36 +1084,36 @@ devsecops_sca:
                 });
                 
                 const summaryHtml = `
-                    <div class="summary-item"><h2>Total Vulnerabilities</h2><div class="count">\${summary.total}</div></div>
-                    <div class="summary-item"><h2>Critical</h2><div class="count critical">\${summary.critical}</div></div>
-                    <div class="summary-item"><h2>High</h2><div class="count high">\${summary.high}</div></div>
-                    <div class="summary-item"><h2>Medium</h2><div class="count medium">\${summary.medium}</div></div>
-                    <div class="summary-item"><h2>Low</h2><div class="count low">\${summary.low}</div></div>
+                    <div class="summary-item"><h2>Total Vulnerabilities</h2><div class="count">${summary.total}</div></div>
+                    <div class="summary-item"><h2>Critical</h2><div class="count critical">${summary.critical}</div></div>
+                    <div class="summary-item"><h2>High</h2><div class="count high">${summary.high}</div></div>
+                    <div class="summary-item"><h2>Medium</h2><div class="count medium">${summary.medium}</div></div>
+                    <div class="summary-item"><h2>Low</h2><div class="count low">${summary.low}</div></div>
                 `;
                 document.getElementById('summary').innerHTML = summaryHtml;
                 
                 const vulnsHtml = (reportData.vulnerabilities || []).map(vuln => {
                     const severity = (vuln.severity || 'unknown').toLowerCase();
-                    const linksHtml = (vuln.links || []).map(link => \`<a href="\${link.url}" target="_blank" rel="noopener noreferrer">\${link.name || 'Link'}</a>\`).join('');
-                    const identifiersHtml = (vuln.identifiers || []).map(id => \`<a href="\${id.url}" target="_blank" rel="noopener noreferrer">\${id.name}</a>\`).join(', ');
+                    const linksHtml = (vuln.links || []).map(link => `<a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.name || 'Link'}</a>`).join('');
+                    const identifiersHtml = (vuln.identifiers || []).map(id => `<a href="${id.url}" target="_blank" rel="noopener noreferrer">${id.name}</a>`).join(', ');
 
                     return `
-                        <div class="vulnerability \${severity}">
+                        <div class="vulnerability ${severity}">
                             <div class="vuln-header">
-                                <span class="vuln-id">\${vuln.name || vuln.id}</span>
-                                <span class="severity-badge \${severity}">\${vuln.severity || 'Unknown'}</span>
+                                <span class="vuln-id">${vuln.name || vuln.id}</span>
+                                <span class="severity-badge ${severity}">${vuln.severity || 'Unknown'}</span>
                             </div>
-                            <p>\${vuln.description || 'No description available.'}</p>
+                            <p>${vuln.description || 'No description available.'}</p>
                             <div class="package-info">
-                                <strong>Package:</strong> \${vuln.location.dependency.package.name}<br>
-                                <strong>Version:</strong> \${vuln.location.dependency.version || 'Unknown'}<br>
-                                <strong>File:</strong> \${vuln.location.file || 'N/A'}
+                                <strong>Package:</strong> ${vuln.location.dependency.package.name}<br>
+                                <strong>Version:</strong> ${vuln.location.dependency.version || 'Unknown'}<br>
+                                <strong>File:</strong> ${vuln.location.file || 'N/A'}
                             </div>
                             <div class="links">
-                                <strong>Links:</strong> \${linksHtml}
+                                <strong>Links:</strong> ${linksHtml}
                             </div>
                             <div class="links">
-                                <strong>Identifiers:</strong> \${identifiersHtml}
+                                <strong>Identifiers:</strong> ${identifiersHtml}
                             </div>
                         </div>
                     `;
