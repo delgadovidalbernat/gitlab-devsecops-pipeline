@@ -29,7 +29,7 @@ variables:
     dast:
       enabled: true
       target_url: "auto"  # auto, or specific URL
-      login_endpoint: "login"  # endpoint for login, if needed
+      login_page: "login"  # endpoint for login, if needed
       username: "admin"  # username for authentication
       password: "password"  # password for authentication
       scan_type: "api"  # api, baseline, full
@@ -780,9 +780,18 @@ devsecops_dast:
       echo "        - $DAST_TARGET_URL.*" >> zap-automation.yaml
       echo "      excludePaths:" >> zap-automation.yaml
       echo "      authentication:" >> zap-automation.yaml
-      echo "        - loginUrl: $DAST_TARGET_URL$DAST_LOGIN_ENDPOINT" >> zap-automation.yaml
-      echo "          username: "$DAST_USERNAME"" >> zap-automation.yaml
-      echo "          password: "$DAST_PASSWORD"" >> zap-automation.yaml
+      echo "        method: 'browser'" >> zap-automation.yaml
+      echo "        parameters:" >> zap-automation.yaml
+      echo "          loginPageUrl: $DAST_TARGET_URL$DAST_LOGIN_PAGE" >> zap-automation.yaml
+      echo "          browserId: 'chrome-headless'" >> zap-automation.yaml
+      echo "      users:" >> zap-automation.yaml
+      echo "        - name: dast-user" >> zap-automation.yaml
+      echo "          credentials:" >> zap-automation.yaml
+      echo "            username: "$DAST_USERNAME"" >> zap-automation.yaml
+      echo "            password: "$DAST_PASSWORD"" >> zap-automation.yaml
+      echo "      sessionManagement:" >> zap-automation.yaml
+      echo "        method: 'autodetect'" >> zap-automation.yaml
+      echo "        parameters: {}" >> zap-automation.yaml
       
       # Add exclude paths
       if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
