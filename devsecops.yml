@@ -1177,7 +1177,7 @@ devsecops_sca:
       - sca-output/
       - gl-dependency-scanning-report.json
     reports:
-      dependency_scanning: gl-dependency-scanning-report.json
+      sca: gl-dependency-scanning-report.json
   rules:
     - if: $CI_PIPELINE_SOURCE
       when: on_success
