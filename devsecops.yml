@@ -1064,7 +1064,6 @@ devsecops_sca:
                 </script>
             </div>
             <script>
-                // It's safer to parse the data inside a try-catch block.
                 let reportData;
                 try {
                     reportData = JSON.parse(document.getElementById('report-data').textContent);
