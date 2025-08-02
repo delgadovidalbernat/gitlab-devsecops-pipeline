@@ -45,6 +45,9 @@ RUN curl -sL "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSIO
 	rm /tmp/zap.tar.gz && \
 	ln -s /opt/ZAP_${ZAP_VERSION}/zap.sh /usr/local/bin/zap
 
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
 # Download ZAP Python scripts desde Docker oficial
 RUN curl -sL "https://raw.githubusercontent.com/zaproxy/zaproxy/main/docker/zap-baseline.py" -o /usr/local/bin/zap-baseline.py && \
 	curl -sL "https://raw.githubusercontent.com/zaproxy/zaproxy/main/docker/zap-api-scan.py" -o /usr/local/bin/zap-api-scan.py && \
