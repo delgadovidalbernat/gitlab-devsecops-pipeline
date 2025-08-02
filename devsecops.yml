@@ -29,6 +29,9 @@ variables:
     dast:
       enabled: true
       target_url: "auto"  # auto, or specific URL
+      login_endpoint: "login"  # endpoint for login, if needed
+      username: "admin"  # username for authentication
+      password: "password"  # password for authentication
       scan_type: "api"  # api, baseline, full
       openapi_spec: "auto"  # auto, or specific URL
       max_scan_duration: "600"  # seconds
@@ -83,6 +86,12 @@ rules_variable_extractor:
     - echo "DAST_ENABLED=$DAST_ENABLED_VALUE" >> variables.env
     - DAST_TARGET_URL_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.target_url // "auto"')
     - echo "DAST_TARGET_URL=$DAST_TARGET_URL_VALUE" >> variables.env
+    - DAST_LOGIN_ENDPOINT_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.login_endpoint // "login"')
+    - echo "DAST_LOGIN_ENDPOINT=$DAST_LOGIN_ENDPOINT_VALUE" >> variables.env
+    - DAST_USERNAME_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.username // "admin"')
+    - echo "DAST_USERNAME=$DAST_USERNAME_VALUE" >> variables.env
+    - DAST_PASSWORD_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.password // "password"')
+    - echo "DAST_PASSWORD=$DAST_PASSWORD_VALUE" >> variables.env
     - DAST_SCAN_TYPE_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.scan_type // "api"')
     - echo "DAST_SCAN_TYPE=$DAST_SCAN_TYPE_VALUE" >> variables.env
     - DAST_OPENAPI_SPEC_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.openapi_spec // "auto"')
@@ -770,6 +779,10 @@ devsecops_dast:
       echo "      includePaths:" >> zap-automation.yaml
       echo "        - $DAST_TARGET_URL.*" >> zap-automation.yaml
       echo "      excludePaths:" >> zap-automation.yaml
+      echo "      authentication:" >> zap-automation.yaml
+      echo "        - loginUrl: $DAST_TARGET_URL/$DAST_LOGIN_ENDPOINT" >> zap-automation.yaml
+      echo "          username: "$DAST_USERNAME"" >> zap-automation.yaml
+      echo "          password: "$DAST_PASSWORD"" >> zap-automation.yaml
       
       # Add exclude paths
       if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
@@ -791,11 +804,12 @@ devsecops_dast:
       echo "      targetUrl: $DAST_TARGET_URL" >> zap-automation.yaml
       echo "      apiUrl: $DAST_OPENAPI_SPEC" >> zap-automation.yaml
       echo "" >> zap-automation.yaml
-      echo "  - type: spider" >> zap-automation.yaml
+      echo "  - type: spiderAjax" >> zap-automation.yaml
       echo "    parameters:" >> zap-automation.yaml
       echo "      context: dast-context" >> zap-automation.yaml
       echo "      url: $DAST_TARGET_URL" >> zap-automation.yaml
-      echo "      maxDuration: 2" >> zap-automation.yaml
+      echo "      maxDuration: 5" >> zap-automation.yaml
+      echo "      browser: 'Chrome'" >> zap-automation.yaml
       echo "" >> zap-automation.yaml
       echo "  - type: activeScan" >> zap-automation.yaml
       echo "    parameters:" >> zap-automation.yaml
