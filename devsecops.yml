@@ -1003,7 +1003,7 @@ devsecops_sca:
       
       # Create an HTML report using a here-document.
       # IMPORTANT: The final 'EOF' must not have any leading spaces.
-      cat > sca-output/osv-report.html <<'EOF'
+      cat > sca-output/osv-report.html <<EOF
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -1140,10 +1140,10 @@ devsecops_sca:
         # Then, count how many vulnerabilities meet or exceed the configured severity threshold.
         THRESHOLD_PASSED_VULNS=$(jq -r --arg SEV_THRESHOLD "$SCA_SEVERITY_THRESHOLD" '
           def severity_level(s):
-            if . == "Critical" then 4
-            elif . == "High" then 3
-            elif . == "Medium" then 2
-            elif . == "Low" then 1
+            if s == "Critical" then 4
+            elif s == "High" then 3
+            elif s == "Medium" then 2
+            elif s == "Low" then 1
             else 0
             end;
           
