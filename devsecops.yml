@@ -809,7 +809,7 @@ devsecops_dast:
       echo "      context: dast-context" >> zap-automation.yaml
       echo "      url: $DAST_TARGET_URL" >> zap-automation.yaml
       echo "      maxDuration: 5" >> zap-automation.yaml
-      echo "      browser: 'Chrome'" >> zap-automation.yaml
+      echo "      browserId: 'chrome-headless'" >> zap-automation.yaml
       echo "" >> zap-automation.yaml
       echo "  - type: activeScan" >> zap-automation.yaml
       echo "    parameters:" >> zap-automation.yaml
