@@ -86,8 +86,8 @@ rules_variable_extractor:
     - echo "DAST_ENABLED=$DAST_ENABLED_VALUE" >> variables.env
     - DAST_TARGET_URL_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.target_url // "auto"')
     - echo "DAST_TARGET_URL=$DAST_TARGET_URL_VALUE" >> variables.env
-    - DAST_LOGIN_ENDPOINT_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.login_endpoint // "login"')
-    - echo "DAST_LOGIN_ENDPOINT=$DAST_LOGIN_ENDPOINT_VALUE" >> variables.env
+    - DAST_LOGIN_PAGE_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.login_page // "login"')
+    - echo "DAST_LOGIN_PAGE=$DAST_LOGIN_PAGE_VALUE" >> variables.env
     - DAST_USERNAME_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.username // "admin"')
     - echo "DAST_USERNAME=$DAST_USERNAME_VALUE" >> variables.env
     - DAST_PASSWORD_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.password // "password"')
