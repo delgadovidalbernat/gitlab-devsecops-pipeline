@@ -780,7 +780,7 @@ devsecops_dast:
       echo "        - $DAST_TARGET_URL.*" >> zap-automation.yaml
       echo "      excludePaths:" >> zap-automation.yaml
       echo "      authentication:" >> zap-automation.yaml
-      echo "        - loginUrl: $DAST_TARGET_URL/$DAST_LOGIN_ENDPOINT" >> zap-automation.yaml
+      echo "        - loginUrl: $DAST_TARGET_URL$DAST_LOGIN_ENDPOINT" >> zap-automation.yaml
       echo "          username: "$DAST_USERNAME"" >> zap-automation.yaml
       echo "          password: "$DAST_PASSWORD"" >> zap-automation.yaml
       
