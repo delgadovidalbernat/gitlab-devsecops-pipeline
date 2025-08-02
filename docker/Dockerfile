@@ -38,9 +38,8 @@ RUN apk add --no-cache python3 py3-pip && \
 
 # Install OWASP ZAP
 ARG ZAP_VERSION=2.16.0
-RUN apk add --no-cache openjdk17 && \
-	java -version
-RUN curl -sL "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" -o /tmp/zap.tar.gz && \
+RUN apk add --no-cache openjdk17-jre-headless && \
+	curl -sL "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" -o /tmp/zap.tar.gz && \
 	tar -xzf /tmp/zap.tar.gz -C /opt/ && \
 	rm /tmp/zap.tar.gz && \
 	ln -s /opt/ZAP_${ZAP_VERSION}/zap.sh /usr/local/bin/zap
