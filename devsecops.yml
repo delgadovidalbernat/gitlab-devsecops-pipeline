@@ -32,7 +32,6 @@ variables:
       login_page: "login"  # endpoint for login, if needed
       username: "admin"  # username for authentication
       password: "password"  # password for authentication
-      scan_type: "api"  # api, baseline, full
       openapi_spec: "auto"  # auto, or specific URL
       max_scan_duration: "600"  # seconds
       fail_on_detection: false
@@ -92,8 +91,6 @@ rules_variable_extractor:
     - echo "DAST_USERNAME=$DAST_USERNAME_VALUE" >> variables.env
     - DAST_PASSWORD_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.password // "password"')
     - echo "DAST_PASSWORD=$DAST_PASSWORD_VALUE" >> variables.env
-    - DAST_SCAN_TYPE_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.scan_type // "api"')
-    - echo "DAST_SCAN_TYPE=$DAST_SCAN_TYPE_VALUE" >> variables.env
     - DAST_OPENAPI_SPEC_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.openapi_spec // "auto"')
     - echo "DAST_OPENAPI_SPEC=$DAST_OPENAPI_SPEC_VALUE" >> variables.env
     - DAST_MAX_DURATION_VALUE=$(echo "$DEVSECOPS_CONFIG" | yq e '.dast.max_scan_duration // "300"')
@@ -116,7 +113,6 @@ rules_variable_extractor:
     - echo "Variable extracted SCA_RECURSIVE=$SCA_RECURSIVE_VALUE"
     - echo "Variable extracted DAST_ENABLED=$DAST_ENABLED_VALUE"
     - echo "Variable extracted DAST_TARGET_URL=$DAST_TARGET_URL_VALUE"
-    - echo "Variable extracted DAST_SCAN_TYPE=$DAST_SCAN_TYPE_VALUE"
     - echo "Variable extracted DAST_OPENAPI_SPEC=$DAST_OPENAPI_SPEC_VALUE"
     - echo "Variable extracted DAST_MAX_DURATION=$DAST_MAX_DURATION_VALUE"
     - echo "Variable extracted DAST_FAIL_ON_DETECTION=$DAST_FAIL_ON_DETECTION_VALUE"
@@ -740,14 +736,12 @@ devsecops_dast:
 
       # Extract DAST configuration from YAML
       DAST_TARGET_URL=$(yq e '.dast.target_url // "auto"' /tmp/devsecops-config.yml)
-      DAST_SCAN_TYPE=$(yq e '.dast.scan_type // "api"' /tmp/devsecops-config.yml)
       DAST_MAX_DURATION=$(yq e '.dast.max_scan_duration // "300"' /tmp/devsecops-config.yml)
       DAST_OPENAPI_SPEC=$(yq e '.dast.openapi_spec // "auto"' /tmp/devsecops-config.yml)
       DAST_FAIL_ON_DETECTION=$(yq e '.dast.fail_on_detection // false' /tmp/devsecops-config.yml)
 
       echo "DAST Configuration:"
       echo "  Target URL: $DAST_TARGET_URL"
-      echo "  Scan Type: $DAST_SCAN_TYPE"
       echo "  Max Duration: $DAST_MAX_DURATION seconds"
       echo "  OpenAPI Spec: $DAST_OPENAPI_SPEC"
 
