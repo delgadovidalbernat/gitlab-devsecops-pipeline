@@ -892,7 +892,6 @@ devsecops_sca:
 
       # --- Configuration Extraction ---
       # Extract SCA settings from the devsecops-config.yml file using yq.
-      # Provide default values for each setting in case they are not specified.
       echo "Extracting SCA configuration..."
       SCA_SEVERITY_THRESHOLD=$(yq e '.sca.severity_threshold // "medium"' /tmp/devsecops-config.yml)
       SCA_FAIL_ON_DETECTION=$(yq e '.sca.fail_on_detection // false' /tmp/devsecops-config.yml)
@@ -909,15 +908,12 @@ devsecops_sca:
       mkdir -p sca-output
 
       # --- OSV-Scanner Command Construction ---
-      # Base command for osv-scanner.
       OSV_CMD="osv-scanner --format json --output sca-output/osv-report.json"
       
-      # Add the recursive flag if enabled.
       if [ "$SCA_RECURSIVE" = "true" ]; then
         OSV_CMD+=" -r"
       fi
 
-      # Specify the target for scanning. Can be automatic or a list of ecosystems.
       if [ "$SCA_ECOSYSTEMS" = "auto" ]; then
         echo "Automatically detecting project ecosystems..."
         OSV_CMD+=" ." # Scan the current directory
@@ -927,7 +923,6 @@ devsecops_sca:
       fi
 
       # Combine global and SCA-specific exclude paths.
-      # The `combine_exclude_paths` function is assumed to be defined elsewhere (e.g., in .devsecops_template).
       COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "sca")
       if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
         echo "Excluding paths: $COMBINED_EXCLUDE_PATHS"
@@ -1009,7 +1004,6 @@ devsecops_sca:
 
       # --- HTML Report Generation ---
       echo "Generating HTML report..."
-      # Safely read the JSON report content into a variable for embedding in HTML.
       REPORT_JSON=$(jq -c '.' gl-dependency-scanning-report.json)
       
       # Create an HTML report using a here-document.
@@ -1137,7 +1131,6 @@ devsecops_sca:
       HTML_FOOTER
 
       # --- Final Check and Job Failure Logic ---
-      # Count the total number of vulnerabilities found.
       TOTAL_VULNS=$(jq '.vulnerabilities | length' gl-dependency-scanning-report.json 2>/dev/null || echo "0")
       
       echo ""
