@@ -40,8 +40,8 @@ That's it! Your pipeline now includes:
 This project includes a custom Docker image that combines:
 - **Alpine Linux 3.18** (lightweight base)
 - **GitLeaks v8.21.2** (secret detection)
-- **Semgrep** (static analysis - planned)
-- **OWASP Dependency Check v9.0.8** (dependency scanning - planned)
+- **Semgrep** (static analysis)
+- **OSV-Scanner v1.8.5** (dependency scanning)
 
 Image: `registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline:latest`
 
@@ -54,8 +54,8 @@ Image: `registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline:latest`
 - [x] GitLab Security Dashboard integration
 - [x] HTML and JSON reports
 - [x] SAST (Semgrep)
-- [ ] SCA (OWASP Dependency-Check)  
-- [ ] DAST (OWASP ZAP)
+- [x] SCA (OSV-Scanner)
+- [x] DAST (OWASP ZAP)
 
 ## 🔧 Configuration
 
@@ -86,16 +86,29 @@ sast:
 
 ```yaml
 sca:
-  enabled: true
-  severity_threshold: medium
+    enabled: true
+    severity_threshold: "medium" # low, medium, high, critical
+    fail_on_detection: false
+    ecosystems: "auto" # auto, o rutas específicas
+    recursive: true
+    exclude_paths: []
 ```
 
 ### DAST Configuration (planned)
 
 ```yaml
 dast:
-  enabled: false
-  target_url: "https://your-app.com"
+    enabled: true
+    target_url: "http://some-app.example.com"
+    login_page: "/login"
+    username: "admin"
+    password: "admin123"
+    openapi_spec: "auto"
+    max_scan_duration: "30000"
+    fail_on_detection: false
+    exclude_paths:
+    - "/swagger/*"
+    - "/docs/*"
 ```
 
 ## Features
@@ -153,6 +166,14 @@ This project uses the following external tools in its DevSecOps pipeline:
 
 - **Gitleaks**: [https://github.com/gitleaks/gitleaks](https://github.com/gitleaks/gitleaks)
   License: MIT
+  Included as a binary in the Docker image.
+
+- **OSV-Scanner**: [https://google.github.io/osv-scanner/](https://google.github.io/osv-scanner/)
+  License: Apache-2.0
+  Included as a binary in the Docker image.
+
+- **OWASP ZAP**: [https://www.zaproxy.org/](https://www.zaproxy.org/)
+  License: Apache-2.0
   Included as a binary in the Docker image.
 
 ## License

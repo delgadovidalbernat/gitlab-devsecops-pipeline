@@ -1,12 +1,13 @@
-# Basic example of GitLab DevSecOps Pipeline integration.
+# Basic example of GitLab DevSecOps Pipeline integration
 include:
   - remote: 'https://gitlab.com/devsecops-hub/gitlab-devsecops-pipeline/-/raw/main/devsecops.yml'
 
 stages:
   - build
-  - test  
+  - test
+  - health
   - security
-  - deploy
+  - .post
 
 variables:
   DEVSECOPS_CONFIG: |
@@ -14,25 +15,33 @@ variables:
       enabled: true
       fail_on_detection: false
       redact: true
-      exclude_paths:
-        - .git
+      exclude_paths: []
     sast:
       enabled: true
-      severity_threshold: medium
+      severity_threshold: "medium"
+      languages: "auto"
+      fail_on_detection: false
+      exclude_paths: []
     sca:
       enabled: true
+      severity_threshold: "medium" # low, medium, high, critical
+      fail_on_detection: false
+      ecosystems: "auto" # auto, o rutas específicas
+      recursive: true
+      exclude_paths: []
     dast:
-      enabled: false
 
-# Regular CI/CD jobs.
 build_app:
   stage: build
-  image: node:18
+  image: golang:1.24.5-alpine
   script:
-    - echo "Building application..."
+    - echo "Building Go application..."
+    - go mod download
+    - go build -o vulnerable-api examples/vulnerable-api/main.go
   artifacts:
     paths:
-      - app.js
+      - vulnerable-api
+    expire_in: 1 hour
 
 test_app:
   stage: test
@@ -41,11 +50,32 @@ test_app:
     - echo "Running tests..."
     - echo "Tests passed!"
 
-deploy_app:
-  stage: deploy
-  script:
-    - echo "Deploying application..."
-  environment:
-    name: production
-  only:
-    - main
+health_check:
+  stage: health
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script: |
+    echo "Checking application health..."
+    TARGET_URL="http://206.189.13.3"
+    SWAGGER_URL="$TARGET_URL/swagger/doc.json"
+    echo "Target URL: $TARGET_URL"
+    echo "Attempting health check to $TARGET_URL/api/v1/health"
+    for i in $(seq 1 15); do
+      echo "Health check attempt $i/15..."
+      if curl -f -s "$TARGET_URL/api/v1/health"; then
+        echo "OK - Health check successful!"
+        curl -s "$TARGET_URL/api/v1/health" | echo "Response: $(cat)"
+        break
+      else
+        echo "ERROR - Health check failed, waiting 2 seconds..."
+        sleep 2
+      fi
+      if [ $i -eq 15 ]; then
+        echo "ERROR - Health check failed after 30 seconds"
+        exit 1
+      fi
+    done
+    echo "Testing Swagger endpoint..."
+    echo "Swagger URL: $SWAGGER_URL"
+    curl -f -s "$SWAGGER_URL" > /dev/null && echo "OK - Swagger JSON endpoint available" || echo "ERROR - Swagger JSON endpoint failed"
