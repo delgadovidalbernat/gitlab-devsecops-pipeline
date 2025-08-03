@@ -938,19 +938,13 @@ devsecops_sca:
 
       # --- Execution and Report Generation ---
       echo "Executing OSV-Scanner with command: $OSV_CMD"
-      # Use `eval` to correctly interpret the command string with its arguments.
-      # A `|| true` is added to prevent `set -e` from exiting if osv-scanner finds vulnerabilities (it exits with a non-zero code).
-      # We will check the exit code manually later if needed.
       if ! eval "$OSV_CMD"; then
-        # Check if the output file was created and is not empty. Some errors still produce a file.
         if [ -s "sca-output/osv-report.json" ]; then
             echo "OSV-Scanner finished with a non-zero exit code, but a report was generated. Proceeding with analysis."
         else
             echo "WARNING: OSV-Scanner failed to execute. Generating an empty report."
             echo '{"vulnerabilities": []}' > gl-dependency-scanning-report.json
-            # We create an empty HTML report as well to satisfy the artifact path.
             echo "<html><body><h1>OSV-Scanner failed to run.</h1></body></html>" > sca-output/osv-report.html
-            # Exit gracefully so the pipeline can continue and show the empty report.
             exit 0
         fi
       else
@@ -958,8 +952,6 @@ devsecops_sca:
       fi
       
       # --- Report Transformation ---
-      # Convert the OSV-Scanner JSON output to the GitLab Dependency Scanning report format using jq.
-      # If this conversion fails, create a minimal, empty report to prevent pipeline failure.
       echo "Transforming OSV report to GitLab format..."
       if ! jq '{
           "version": "15.0.0",
