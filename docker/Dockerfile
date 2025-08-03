@@ -1,8 +1,7 @@
 FROM alpine:3.22.1
 
-LABEL maintainer="Bernat Delgado <bdelgadov@gmail.com>"
-LABEL description="GitLab DevSecOps Tools - Alpine-based security scanning tools"
-LABEL version="2.1.0"
+LABEL maintainer="Bernat Delgado <delgadovidalbernat@gmail.com>"
+LABEL description="GitLab DevSecOps Tools"
 
 # Install base dependencies
 RUN apk add --no-cache \
@@ -13,6 +12,11 @@ RUN apk add --no-cache \
 	tar \
 	gzip \
 	bash \
+	chromium \
+	nss \
+	freetype \
+	harfbuzz \
+	icu \
 	&& rm -rf /var/cache/apk/*
 
 # Install yq for YAML parsing
