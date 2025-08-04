@@ -973,9 +973,10 @@ devsecops_sca:
               "location": {
                 "file": $result.source.path // "unknown",
                 "dependency": {
-                  "package": { "name": .package.name // .affected[0].package.name,
-                  "ecosystem": $pkg.ecosystem // "unknown"
-                },
+                  "package": { 
+                    "name": .package.name // .affected[0].package.name,
+                    "ecosystem": .package.ecosystem // "unknown"
+                  },
                   "version": .package.version // .affected[0].versions[0]
                 }
               },
