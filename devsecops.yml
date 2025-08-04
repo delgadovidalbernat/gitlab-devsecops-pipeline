@@ -1059,7 +1059,24 @@ devsecops_sca:
               <script id="report-data" type="application/json">
       HTML_HEADER
 
-      echo "$REPORT_JSON" | jq -c '.' >> sca-output/osv-report.html
+      # Sanitize the JSON data before embedding it in HTML to prevent XSS attacks
+      echo "Sanitizing JSON data to prevent XSS attacks..."
+      echo "$REPORT_JSON" | jq -c '
+          walk(
+              if type == "string" then
+                  # Remove any HTML/script tags and encode dangerous characters
+                  gsub("<script[^>]*>.*?</script>"; ""; "i") |
+                  gsub("<[^>]*>"; "") |
+                  gsub("&"; "&amp;") |
+                  gsub("<"; "&lt;") |
+                  gsub(">"; "&gt;") |
+                  gsub("\""; "&quot;") |
+                  gsub("'\''"; "&#x27;")
+              else 
+                  .
+              end
+          )
+      ' >> sca-output/osv-report.html
 
       cat >> sca-output/osv-report.html << 'HTML_FOOTER'
               </script>
