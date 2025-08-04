@@ -787,8 +787,8 @@ devsecops_dast:
       echo "      users:" >> zap-automation.yaml
       echo "        - name: dast-user" >> zap-automation.yaml
       echo "          credentials:" >> zap-automation.yaml
-      echo "            username: "$DAST_USERNAME"" >> zap-automation.yaml
-      echo "            password: "$DAST_PASSWORD"" >> zap-automation.yaml
+      echo "            username: \"$DAST_USERNAME\"" >> zap-automation.yaml
+      echo "            password: \"$DAST_PASSWORD\"" >> zap-automation.yaml
       echo "      sessionManagement:" >> zap-automation.yaml
       echo "        method: 'autodetect'" >> zap-automation.yaml
       echo "        parameters: {}" >> zap-automation.yaml
