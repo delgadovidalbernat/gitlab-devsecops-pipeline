@@ -1004,183 +1004,186 @@ devsecops_sca:
       
       # Create an HTML report using a here-document.
       cat > sca-output/osv-report.html <<'HTML_HEADER'
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>OSV Scanner Security Report</title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"; line-height: 1.6; margin: 20px; background-color: #f4f4f4; color: #333; }
-                .container { max-width: 1200px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
-                h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
-                .summary { background-color: #e9ecef; padding: 20px; border-radius: 5px; margin-bottom: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; }
-                .summary-item { text-align: center; }
-                .summary-item h2 { margin: 0; color: #555; font-size: 1.2em; }
-                .summary-item .count { font-size: 2.5em; font-weight: bold; margin: 10px 0; }
-                .count.critical { color: #721c24; }
-                .count.high { color: #e74c3c; }
-                .count.medium { color: #f39c12; }
-                .count.low { color: #3498db; }
-                .vulnerability { background-color: #fff; border: 1px solid #ddd; margin-bottom: 20px; padding: 20px; border-radius: 5px; transition: box-shadow 0.3s ease; }
-                .vulnerability:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-                .vulnerability.critical { border-left: 5px solid #721c24; }
-                .vulnerability.high { border-left: 5px solid #e74c3c; }
-                .vulnerability.medium { border-left: 5px solid #f39c12; }
-                .vulnerability.low { border-left: 5px solid #3498db; }
-                .vuln-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
-                .vuln-id { font-weight: bold; font-size: 1.1em; word-break: break-all; }
-                .severity-badge { padding: 5px 10px; border-radius: 15px; color: white; font-size: 0.9em; font-weight: bold; }
-                .severity-badge.critical { background-color: #721c24; }
-                .severity-badge.high { background-color: #e74c3c; }
-                .severity-badge.medium { background-color: #f39c12; }
-                .severity-badge.low { background-color: #3498db; }
-                .package-info { margin: 15px 0; padding: 10px; background-color: #f8f9fa; border: 1px solid #eee; border-radius: 3px; }
-                .links { margin-top: 15px; }
-                .links a { margin-right: 12px; color: #3498db; text-decoration: none; }
-                .links a:hover { text-decoration: underline; }
-                @media (prefers-color-scheme: dark) {
-                    body { background-color: #1e1e1e; color: #e0e0e0; }
-                    .container { background: #2d2d2d; box-shadow: none; border: 1px solid #444; }
-                    h1 { color: #d0d0d0; }
-                    .summary { background-color: #3a3a3a; border: 1px solid #444; }
-                    .summary-item h2 { color: #ccc; }
-                    .vulnerability { background-color: #252525; border-color: #444; }
-                    .package-info { background-color: #3a3a3a; border-color: #444; }
-                    .links a { color: #58a6ff; }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>OSV Scanner Security Report</h1>
-                <div class="summary" id="summary"></div>
-                <div id="vulnerabilities"></div>
-                <script id="report-data" type="application/json">
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>OSV Scanner Security Report</title>
+          <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"; line-height: 1.6; margin: 20px; background-color: #f4f4f4; color: #333; }
+              .container { max-width: 1200px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
+              h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
+              .summary { background-color: #e9ecef; padding: 20px; border-radius: 5px; margin-bottom: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; }
+              .summary-item { text-align: center; }
+              .summary-item h2 { margin: 0; color: #555; font-size: 1.2em; }
+              .summary-item .count { font-size: 2.5em; font-weight: bold; margin: 10px 0; }
+              .count.critical { color: #721c24; }
+              .count.high { color: #e74c3c; }
+              .count.medium { color: #f39c12; }
+              .count.low { color: #3498db; }
+              .vulnerability { background-color: #fff; border: 1px solid #ddd; margin-bottom: 20px; padding: 20px; border-radius: 5px; transition: box-shadow 0.3s ease; }
+              .vulnerability:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+              .vulnerability.critical { border-left: 5px solid #721c24; }
+              .vulnerability.high { border-left: 5px solid #e74c3c; }
+              .vulnerability.medium { border-left: 5px solid #f39c12; }
+              .vulnerability.low { border-left: 5px solid #3498db; }
+              .vuln-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
+              .vuln-id { font-weight: bold; font-size: 1.1em; word-break: break-all; }
+              .severity-badge { padding: 5px 10px; border-radius: 15px; color: white; font-size: 0.9em; font-weight: bold; }
+              .severity-badge.critical { background-color: #721c24; }
+              .severity-badge.high { background-color: #e74c3c; }
+              .severity-badge.medium { background-color: #f39c12; }
+              .severity-badge.low { background-color: #3498db; }
+              .package-info { margin: 15px 0; padding: 10px; background-color: #f8f9fa; border: 1px solid #eee; border-radius: 3px; }
+              .links { margin-top: 15px; }
+              .links a { margin-right: 12px; color: #3498db; text-decoration: none; }
+              .links a:hover { text-decoration: underline; }
+              @media (prefers-color-scheme: dark) {
+                  body { background-color: #1e1e1e; color: #e0e0e0; }
+                  .container { background: #2d2d2d; box-shadow: none; border: 1px solid #444; }
+                  h1 { color: #d0d0d0; }
+                  .summary { background-color: #3a3a3a; border: 1px solid #444; }
+                  .summary-item h2 { color: #ccc; }
+                  .vulnerability { background-color: #252525; border-color: #444; }
+                  .package-info { background-color: #3a3a3a; border-color: #444; }
+                  .links a { color: #58a6ff; }
+              }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <h1>OSV Scanner Security Report</h1>
+              <div class="summary" id="summary"></div>
+              <div id="vulnerabilities"></div>
+              <script id="report-data" type="application/json">
       HTML_HEADER
 
       echo "$REPORT_JSON" | jq -c '.' >> sca-output/osv-report.html
 
       cat >> sca-output/osv-report.html << 'HTML_FOOTER'
-                </script>
-            </div>
-            <script>
-                let reportData;
-                try {
-                    reportData = JSON.parse(document.getElementById('report-data').textContent);
-                } catch (e) {
-                    console.error("Failed to parse report data:", e);
-                    reportData = { vulnerabilities: [] }; // Fallback to empty data
-                }
+              </script>
+          </div>
+          <script>
+              let reportData;
+              try {
+                  reportData = JSON.parse(document.getElementById('report-data').textContent);
+              } catch (e) {
+                  console.error("Failed to parse report data:", e);
+                  reportData = { vulnerabilities: [] }; // Fallback to empty data
+              }
 
-                const escapeHtml = (text) => {
+              // Function to escape HTML to prevent XSS attacks
+              const escapeHtml = (text) => {
                   const p = document.createElement('p');
                   p.textContent = text;
                   return p.innerHTML;
-                };
-                
-                const summary = { total: 0, critical: 0, high: 0, medium: 0, low: 0, unknown: 0 };
-                (reportData.vulnerabilities || []).forEach(vuln => {
-                    summary.total++;
-                    const severity = (vuln.severity || 'unknown').toLowerCase();
-                    if (summary.hasOwnProperty(severity)) {
-                        summary[severity]++;
-                    } else {
-                        summary.unknown++;
-                    }
-                });
-                
-                const summaryHtml = `
-                    <div class="summary-item"><h2>Total Vulnerabilities</h2><div class="count">${summary.total}</div></div>
-                    <div class="summary-item"><h2>Critical</h2><div class="count critical">${summary.critical}</div></div>
-                    <div class="summary-item"><h2>High</h2><div class="count high">${summary.high}</div></div>
-                    <div class="summary-item"><h2>Medium</h2><div class="count medium">${summary.medium}</div></div>
-                    <div class="summary-item"><h2>Low</h2><div class="count low">${summary.low}</div></div>
-                `;
-                document.getElementById('summary').innerHTML = summaryHtml;
-                
-                const vulnsContainer = document.getElementById('vulnerabilities');
+              };
+              
+              const summary = { total: 0, critical: 0, high: 0, medium: 0, low: 0, unknown: 0 };
+              (reportData.vulnerabilities || []).forEach(vuln => {
+                  summary.total++;
+                  const severity = (vuln.severity || 'unknown').toLowerCase();
+                  if (summary.hasOwnProperty(severity)) {
+                      summary[severity]++;
+                  } else {
+                      summary.unknown++;
+                  }
+              });
+              
+              const summaryHtml = `
+                  <div class="summary-item"><h2>Total Vulnerabilities</h2><div class="count">${summary.total}</div></div>
+                  <div class="summary-item"><h2>Critical</h2><div class="count critical">${summary.critical}</div></div>
+                  <div class="summary-item"><h2>High</h2><div class="count high">${summary.high}</div></div>
+                  <div class="summary-item"><h2>Medium</h2><div class="count medium">${summary.medium}</div></div>
+                  <div class="summary-item"><h2>Low</h2><div class="count low">${summary.low}</div></div>
+              `;
+              document.getElementById('summary').innerHTML = summaryHtml;
+              
+              const vulnsContainer = document.getElementById('vulnerabilities');
               if ((reportData.vulnerabilities || []).length === 0) {
                   vulnsContainer.innerHTML = '<p style="text-align: center; padding: 20px;">No vulnerabilities found!</p>';
               } else {
-                (reportData.vulnerabilities || []).forEach(vuln => {
-                  const severity = (vuln.severity || 'unknown').toLowerCase();
-                  
-                  // Crear el contenedor principal
-                  const vulnDiv = document.createElement('div');
-                  vulnDiv.classList.add('vulnerability', severity);
-                  
-                  // Encabezado
-                  const headerDiv = document.createElement('div');
-                  headerDiv.classList.add('vuln-header');
-                  
-                  const titleSpan = document.createElement('span');
-                  titleSpan.classList.add('vuln-id');
-                  titleSpan.textContent = vuln.name || vuln.id;
-                  headerDiv.appendChild(titleSpan);
-                  
-                  const severityBadge = document.createElement('span');
-                  severityBadge.classList.add('severity-badge', severity);
-                  severityBadge.textContent = vuln.severity || 'Unknown';
-                  headerDiv.appendChild(severityBadge);
-                  
-                  vulnDiv.appendChild(headerDiv);
-                  
-                  // Descripción (sanitizada)
-                  const descriptionP = document.createElement('p');
-                  descriptionP.textContent = vuln.description || 'No description available.';
-                  vulnDiv.appendChild(descriptionP);
-                  
-                  // Información del paquete
-                  const packageInfoDiv = document.createElement('div');
-                  packageInfoDiv.classList.add('package-info');
-                  packageInfoDiv.innerHTML = `
-                      <strong>Package:</strong> ${escapeHtml(vuln.location.dependency.package.name)}<br>
-                      <strong>Version:</strong> ${escapeHtml(vuln.location.dependency.version || 'Unknown')}<br>
-                      <strong>File:</strong> ${escapeHtml(vuln.location.file || 'N/A')}
-                  `;
-                  vulnDiv.appendChild(packageInfoDiv);
-                  
-                  // Links
-                  const linksDiv = document.createElement('div');
-                  linksDiv.classList.add('links');
-                  const linksStrong = document.createElement('strong');
-                  linksStrong.textContent = 'Links: ';
-                  linksDiv.appendChild(linksStrong);
-                  (vuln.links || []).forEach(link => {
-                      const linkElem = document.createElement('a');
-                      linkElem.href = link.url;
-                      linkElem.target = '_blank';
-                      linkElem.rel = 'noopener noreferrer';
-                      linkElem.textContent = link.name || 'Link';
-                      linksDiv.appendChild(linkElem);
-                  });
-                  vulnDiv.appendChild(linksDiv);
+                  (reportData.vulnerabilities || []).forEach(vuln => {
+                      const severity = (vuln.severity || 'unknown').toLowerCase();
+                      
+                      // Create main container
+                      const vulnDiv = document.createElement('div');
+                      vulnDiv.classList.add('vulnerability', severity);
+                      
+                      // Header
+                      const headerDiv = document.createElement('div');
+                      headerDiv.classList.add('vuln-header');
+                      
+                      const titleSpan = document.createElement('span');
+                      titleSpan.classList.add('vuln-id');
+                      titleSpan.textContent = vuln.name || vuln.id; // Using textContent to prevent XSS
+                      headerDiv.appendChild(titleSpan);
+                      
+                      const severityBadge = document.createElement('span');
+                      severityBadge.classList.add('severity-badge', severity);
+                      severityBadge.textContent = vuln.severity || 'Unknown'; // Using textContent to prevent XSS
+                      headerDiv.appendChild(severityBadge);
+                      
+                      vulnDiv.appendChild(headerDiv);
+                      
+                      // Description (sanitized)
+                      const descriptionP = document.createElement('p');
+                      descriptionP.textContent = vuln.description || 'No description available.'; // Using textContent to prevent XSS
+                      vulnDiv.appendChild(descriptionP);
+                      
+                      // Package information
+                      const packageInfoDiv = document.createElement('div');
+                      packageInfoDiv.classList.add('package-info');
+                      packageInfoDiv.innerHTML = `
+                          <strong>Package:</strong> ${escapeHtml(vuln.location.dependency.package.name)}<br>
+                          <strong>Version:</strong> ${escapeHtml(vuln.location.dependency.version || 'Unknown')}<br>
+                          <strong>File:</strong> ${escapeHtml(vuln.location.file || 'N/A')}
+                      `;
+                      vulnDiv.appendChild(packageInfoDiv);
+                      
+                      // Links
+                      const linksDiv = document.createElement('div');
+                      linksDiv.classList.add('links');
+                      const linksStrong = document.createElement('strong');
+                      linksStrong.textContent = 'Links: ';
+                      linksDiv.appendChild(linksStrong);
+                      (vuln.links || []).forEach(link => {
+                          const linkElem = document.createElement('a');
+                          linkElem.href = link.url;
+                          linkElem.target = '_blank';
+                          linkElem.rel = 'noopener noreferrer';
+                          linkElem.textContent = link.name || 'Link'; // Using textContent to prevent XSS
+                          linksDiv.appendChild(linkElem);
+                      });
+                      vulnDiv.appendChild(linksDiv);
 
-                  // Identifiers
-                  const identifiersDiv = document.createElement('div');
-                  identifiersDiv.classList.add('links');
-                  const identifiersStrong = document.createElement('strong');
-                  identifiersStrong.textContent = 'Identifiers: ';
-                  identifiersDiv.appendChild(identifiersStrong);
-                  
-                  const identifierLinks = (vuln.identifiers || []).map(id => {
-                      const idLink = document.createElement('a');
-                      idLink.href = id.url;
-                      idLink.target = '_blank';
-                      idLink.rel = 'noopener noreferrer';
-                      idLink.textContent = id.name;
-                      return idLink.outerHTML;
-                  }).join(', ');
-                  identifiersDiv.innerHTML += identifierLinks;
-                  
-                  vulnDiv.appendChild(identifiersDiv);
-                  vulnsContainer.appendChild(vulnDiv);
-              });
-            }
+                      // Identifiers
+                      const identifiersDiv = document.createElement('div');
+                      identifiersDiv.classList.add('links');
+                      const identifiersStrong = document.createElement('strong');
+                      identifiersStrong.textContent = 'Identifiers: ';
+                      identifiersDiv.appendChild(identifiersStrong);
+                      
+                      (vuln.identifiers || []).forEach((id, index) => {
+                          if (index > 0) {
+                              identifiersDiv.appendChild(document.createTextNode(', '));
+                          }
+                          const idLink = document.createElement('a');
+                          idLink.href = id.url;
+                          idLink.target = '_blank';
+                          idLink.rel = 'noopener noreferrer';
+                          idLink.textContent = id.name; // Using textContent to prevent XSS
+                          identifiersDiv.appendChild(idLink);
+                      });
+                      
+                      vulnDiv.appendChild(identifiersDiv);
+                      vulnsContainer.appendChild(vulnDiv);
+                  });
+              }
           </script>
-        </body>
-        </html>
+      </body>
+      </html>
       HTML_FOOTER
 
       # --- Final Check and Job Failure Logic ---
