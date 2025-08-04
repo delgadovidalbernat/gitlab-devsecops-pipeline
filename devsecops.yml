@@ -975,7 +975,7 @@ devsecops_sca:
                 "dependency": {
                   "package": { 
                     "name": .package.name // .affected[0].package.name,
-                    "ecosystem": .package.ecosystem // "unknown"
+                    "ecosystem": $pkg.package.ecosystem // "unknown"
                   },
                   "version": .package.version // .affected[0].versions[0]
                 }
