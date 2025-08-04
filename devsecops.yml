@@ -954,7 +954,9 @@ devsecops_sca:
           },
           "ecosystems": ([.results[]?.packages[]?.package?.ecosystem // empty] | unique | sort),
           "vulnerabilities": [
-            .results[]?.packages[]?.vulnerabilities[]? | {
+            .results[]? as $result |
+            $result.packages[] as $pkg |
+            $pkg.vulnerabilities[]? | {
               "id": .id,
               "name": .summary // .id,
               "description": .details // .summary // "No description available",
@@ -969,7 +971,7 @@ devsecops_sca:
               "confidence": "High",
               "scanner": { "id": "osv-scanner", "name": "OSV Scanner" },
               "location": {
-                "file": .package.name // "unknown",
+                "file": $result.source.path // "unknown",
                 "dependency": {
                   "package": { "name": .package.name // .affected[0].package.name,
                   "ecosystem": $pkg.ecosystem // "unknown"
