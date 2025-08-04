@@ -922,8 +922,6 @@ devsecops_sca:
       COMBINED_EXCLUDE_PATHS=$(combine_exclude_paths "sca")
       if [ -n "$COMBINED_EXCLUDE_PATHS" ]; then
         echo "Excluding paths: $COMBINED_EXCLUDE_PATHS"
-        # Note: This approach might be fragile if paths contain spaces.
-        # Consider using a different method for complex exclusion rules.
         OSV_CMD+=" --skip-git -e $COMBINED_EXCLUDE_PATHS"
       fi
 
@@ -954,6 +952,7 @@ devsecops_sca:
             "type": "dependency_scanning",
             "scanner": { "id": "osv-scanner", "name": "OSV Scanner", "version": "2.1.0", "vendor": { "name": "Google" } }
           },
+          "ecosystems": ([.results[]?.packages[]?.package?.ecosystem // empty] | unique | sort),
           "vulnerabilities": [
             .results[]?.packages[]?.vulnerabilities[]? | {
               "id": .id,
@@ -972,7 +971,9 @@ devsecops_sca:
               "location": {
                 "file": .package.name // "unknown",
                 "dependency": {
-                  "package": { "name": .package.name // .affected[0].package.name },
+                  "package": { "name": .package.name // .affected[0].package.name,
+                  "ecosystem": $pkg.ecosystem // "unknown"
+                },
                   "version": .package.version // .affected[0].versions[0]
                 }
               },
@@ -1015,6 +1016,10 @@ devsecops_sca:
               .container { max-width: 1200px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
               h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
               .summary { background-color: #e9ecef; padding: 20px; border-radius: 5px; margin-bottom: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; }
+              .ecosystems { background-color: #e8f4f8; padding: 20px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #17a2b8; }
+              .ecosystems h2 { margin: 0 0 10px 0; color: #17a2b8; font-size: 1.2em; }
+              .ecosystems .ecosystem-list { display: flex; flex-wrap: wrap; gap: 8px; }
+              .ecosystem-badge { background-color: #17a2b8; color: white; padding: 4px 12px; border-radius: 15px; font-size: 0.9em; font-weight: bold; }
               .summary-item { text-align: center; }
               .summary-item h2 { margin: 0; color: #555; font-size: 1.2em; }
               .summary-item .count { font-size: 2.5em; font-weight: bold; margin: 10px 0; }
@@ -1045,6 +1050,9 @@ devsecops_sca:
                   h1 { color: #d0d0d0; }
                   .summary { background-color: #3a3a3a; border: 1px solid #444; }
                   .summary-item h2 { color: #ccc; }
+                  .ecosystems { background-color: #2a4a52; border-left-color: #5bc0de; }
+                  .ecosystems h2 { color: #5bc0de; }
+                  .ecosystem-badge { background-color: #5bc0de; }
                   .vulnerability { background-color: #252525; border-color: #444; }
                   .package-info { background-color: #3a3a3a; border-color: #444; }
                   .links a { color: #58a6ff; }
@@ -1055,6 +1063,7 @@ devsecops_sca:
           <div class="container">
               <h1>OSV Scanner Security Report</h1>
               <div class="summary" id="summary"></div>
+              <div class="ecosystems" id="ecosystems"></div>
               <div id="vulnerabilities"></div>
               <script id="report-data" type="application/json">
       HTML_HEADER
@@ -1116,6 +1125,20 @@ devsecops_sca:
                   <div class="summary-item"><h2>Low</h2><div class="count low">${summary.low}</div></div>
               `;
               document.getElementById('summary').innerHTML = summaryHtml;
+
+              // Generate ecosystems section
+              const ecosystems = reportData.ecosystems || [];
+              if (ecosystems.length > 0) {
+                  const ecosystemsHtml = `
+                      <h2>Ecosystems Found</h2>
+                      <div class="ecosystem-list">
+                          ${ecosystems.map(ecosystem => `<span class="ecosystem-badge">${escapeHtml(ecosystem)}</span>`).join('')}
+                      </div>
+                  `;
+                  document.getElementById('ecosystems').innerHTML = ecosystemsHtml;
+              } else {
+                  document.getElementById('ecosystems').style.display = 'none';
+              }
               
               const vulnsContainer = document.getElementById('vulnerabilities');
               if ((reportData.vulnerabilities || []).length === 0) {
@@ -1155,6 +1178,7 @@ devsecops_sca:
                       packageInfoDiv.innerHTML = `
                           <strong>Package:</strong> ${escapeHtml(vuln.location.dependency.package.name)}<br>
                           <strong>Version:</strong> ${escapeHtml(vuln.location.dependency.version || 'Unknown')}<br>
+                          <strong>Ecosystem:</strong> ${escapeHtml(vuln.location.dependency.package.ecosystem || 'Unknown')}<br>
                           <strong>File:</strong> ${escapeHtml(vuln.location.file || 'N/A')}
                       `;
                       vulnDiv.appendChild(packageInfoDiv);
