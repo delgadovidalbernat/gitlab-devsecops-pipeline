@@ -1072,6 +1072,12 @@ devsecops_sca:
                     console.error("Failed to parse report data:", e);
                     reportData = { vulnerabilities: [] }; // Fallback to empty data
                 }
+
+                const escapeHtml = (text) => {
+                  const p = document.createElement('p');
+                  p.textContent = text;
+                  return p.innerHTML;
+                };
                 
                 const summary = { total: 0, critical: 0, high: 0, medium: 0, low: 0, unknown: 0 };
                 (reportData.vulnerabilities || []).forEach(vuln => {
@@ -1093,35 +1099,86 @@ devsecops_sca:
                 `;
                 document.getElementById('summary').innerHTML = summaryHtml;
                 
-                const vulnsHtml = (reportData.vulnerabilities || []).map(vuln => {
-                    const severity = (vuln.severity || 'unknown').toLowerCase();
-                    const linksHtml = (vuln.links || []).map(link => `<a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.name || 'Link'}</a>`).join('');
-                    const identifiersHtml = (vuln.identifiers || []).map(id => `<a href="${id.url}" target="_blank" rel="noopener noreferrer">${id.name}</a>`).join(', ');
+                const vulnsContainer = document.getElementById('vulnerabilities');
+              if ((reportData.vulnerabilities || []).length === 0) {
+                  vulnsContainer.innerHTML = '<p style="text-align: center; padding: 20px;">No vulnerabilities found!</p>';
+              } else {
+                (reportData.vulnerabilities || []).forEach(vuln => {
+                  const severity = (vuln.severity || 'unknown').toLowerCase();
+                  
+                  // Crear el contenedor principal
+                  const vulnDiv = document.createElement('div');
+                  vulnDiv.classList.add('vulnerability', severity);
+                  
+                  // Encabezado
+                  const headerDiv = document.createElement('div');
+                  headerDiv.classList.add('vuln-header');
+                  
+                  const titleSpan = document.createElement('span');
+                  titleSpan.classList.add('vuln-id');
+                  titleSpan.textContent = vuln.name || vuln.id;
+                  headerDiv.appendChild(titleSpan);
+                  
+                  const severityBadge = document.createElement('span');
+                  severityBadge.classList.add('severity-badge', severity);
+                  severityBadge.textContent = vuln.severity || 'Unknown';
+                  headerDiv.appendChild(severityBadge);
+                  
+                  vulnDiv.appendChild(headerDiv);
+                  
+                  // Descripción (sanitizada)
+                  const descriptionP = document.createElement('p');
+                  descriptionP.textContent = vuln.description || 'No description available.';
+                  vulnDiv.appendChild(descriptionP);
+                  
+                  // Información del paquete
+                  const packageInfoDiv = document.createElement('div');
+                  packageInfoDiv.classList.add('package-info');
+                  packageInfoDiv.innerHTML = `
+                      <strong>Package:</strong> ${escapeHtml(vuln.location.dependency.package.name)}<br>
+                      <strong>Version:</strong> ${escapeHtml(vuln.location.dependency.version || 'Unknown')}<br>
+                      <strong>File:</strong> ${escapeHtml(vuln.location.file || 'N/A')}
+                  `;
+                  vulnDiv.appendChild(packageInfoDiv);
+                  
+                  // Links
+                  const linksDiv = document.createElement('div');
+                  linksDiv.classList.add('links');
+                  const linksStrong = document.createElement('strong');
+                  linksStrong.textContent = 'Links: ';
+                  linksDiv.appendChild(linksStrong);
+                  (vuln.links || []).forEach(link => {
+                      const linkElem = document.createElement('a');
+                      linkElem.href = link.url;
+                      linkElem.target = '_blank';
+                      linkElem.rel = 'noopener noreferrer';
+                      linkElem.textContent = link.name || 'Link';
+                      linksDiv.appendChild(linkElem);
+                  });
+                  vulnDiv.appendChild(linksDiv);
 
-                    return `
-                        <div class="vulnerability ${severity}">
-                            <div class="vuln-header">
-                                <span class="vuln-id">${vuln.name || vuln.id}</span>
-                                <span class="severity-badge ${severity}">${vuln.severity || 'Unknown'}</span>
-                            </div>
-                            <p>${vuln.description || 'No description available.'}</p>
-                            <div class="package-info">
-                                <strong>Package:</strong> ${vuln.location.dependency.package.name}<br>
-                                <strong>Version:</strong> ${vuln.location.dependency.version || 'Unknown'}<br>
-                                <strong>File:</strong> ${vuln.location.file || 'N/A'}
-                            </div>
-                            <div class="links">
-                                <strong>Links:</strong> ${linksHtml}
-                            </div>
-                            <div class="links">
-                                <strong>Identifiers:</strong> ${identifiersHtml}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-                
-                document.getElementById('vulnerabilities').innerHTML = vulnsHtml || '<p style="text-align: center; padding: 20px;">No vulnerabilities found!</p>';
-            </script>
+                  // Identifiers
+                  const identifiersDiv = document.createElement('div');
+                  identifiersDiv.classList.add('links');
+                  const identifiersStrong = document.createElement('strong');
+                  identifiersStrong.textContent = 'Identifiers: ';
+                  identifiersDiv.appendChild(identifiersStrong);
+                  
+                  const identifierLinks = (vuln.identifiers || []).map(id => {
+                      const idLink = document.createElement('a');
+                      idLink.href = id.url;
+                      idLink.target = '_blank';
+                      idLink.rel = 'noopener noreferrer';
+                      idLink.textContent = id.name;
+                      return idLink.outerHTML;
+                  }).join(', ');
+                  identifiersDiv.innerHTML += identifierLinks;
+                  
+                  vulnDiv.appendChild(identifiersDiv);
+                  vulnsContainer.appendChild(vulnDiv);
+              });
+            }
+          </script>
         </body>
         </html>
       HTML_FOOTER
