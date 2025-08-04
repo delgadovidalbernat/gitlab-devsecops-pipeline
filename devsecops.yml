@@ -753,10 +753,7 @@ devsecops_dast:
       fi
 
       # Auto-detect OpenAPI spec URL if needed
-      if [ "$DAST_OPENAPI_SPEC" = "auto" ]; then
-        DAST_OPENAPI_SPEC="$DAST_TARGET_URL/swagger/doc.json"
-        echo "Auto-detected OpenAPI spec: $DAST_OPENAPI_SPEC"
-      fi
+      DAST_OPENAPI_SPEC="$DAST_TARGET_URL$DAST_OPENAPI_SPEC"
 
       # Generate ZAP automation config using echo
       echo "Generating ZAP automation configuration..."
