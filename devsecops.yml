@@ -1,9 +1,5 @@
 # Security-as-a-Service for GitLab CI/CD
 # This file is designed to be included in other pipelines
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE
-
 variables:
   DEVSECOPS_IMAGE: "registry.gitlab.com/devsecops-hub/gitlab-devsecops-pipeline:latest"
   DEVSECOPS_CONFIG: |
